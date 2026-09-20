@@ -154,6 +154,11 @@ public sealed class VarArgGenericObservationTests
             IlasmLocator.Assemble(session.ToIlAsm()),
         })
         {
+            AssertCalls(image);
+        }
+
+        static void AssertCalls(byte[] image)
+        {
             using var moduleStream = new MemoryStream(image);
             using var module = ModuleDefinition.ReadModule(moduleStream);
             var caller = module.Types.Single(type => type.Name == "Caller`1");

@@ -82,13 +82,11 @@ internal sealed partial class ReflectionValueResolver
             return;
         }
 
-        foreach (var origin in values[^fromTop].Origins)
+        foreach (var origin in values[^fromTop].Origins
+            .Where(origin => !_ordinaryMetadataOrigins.Contains((body.Method, origin, isCopiedMember)))
+            .Where(origin => _copiedMetadataVisited.Add((body.Method, origin))))
         {
-            if (!_ordinaryMetadataOrigins.Contains((body.Method, origin, isCopiedMember))
-                && _copiedMetadataVisited.Add((body.Method, origin)))
-            {
-                _copiedMetadataPending.Enqueue((body, origin));
-            }
+            _copiedMetadataPending.Enqueue((body, origin));
         }
     }
 

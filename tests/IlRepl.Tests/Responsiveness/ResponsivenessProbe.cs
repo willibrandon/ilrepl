@@ -248,14 +248,11 @@ internal static class ResponsivenessProbe
                 }
 
                 string[] roles = OperatingSystem.IsWindows() ? ["host"] : ["host", "supervisor"];
-                foreach (var role in roles)
+                foreach (var role in roles.Where(role => !processes.Any(item => item.Role == role
+                    && item.Stages["entry"] >= launch.Launched && item.Stages["entry"] < next)))
                 {
-                    if (!processes.Any(item => item.Role == role && item.Stages["entry"] >= launch.Launched
-                        && item.Stages["entry"] < next))
-                    {
-                        failure ??= new InvalidOperationException($"A {role} did not retain its measurement artifact.");
-                        failureStage ??= "process artifacts";
-                    }
+                    failure ??= new InvalidOperationException($"A {role} did not retain its measurement artifact.");
+                    failureStage ??= "process artifacts";
                 }
 
                 var entry = process.Stages["entry"];

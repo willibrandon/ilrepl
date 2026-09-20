@@ -38,9 +38,8 @@ public sealed class LookupComparisonTests
         var same = await ProcessComparisonRunner.RunAsync(ComparisonCapture.Create(session, "Copy ()"),
             TestContext.CancellationToken);
         Assert.AreEqual("match", same.Outcome, same.Original.Detail + "; " + same.Edited.Detail);
-        foreach (var side in new[] { same.Original, same.Edited })
+        foreach (var lookup in new[] { same.Original, same.Edited }.Select(side => side.Result!))
         {
-            var lookup = side.Result!;
             Assert.AreEqual("lookup", lookup.Kind);
             Assert.HasCount(3, lookup.Members);
             Assert.AreEqual("comparer", lookup.Members[0].Name);

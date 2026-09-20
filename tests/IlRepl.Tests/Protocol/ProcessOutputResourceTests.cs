@@ -167,13 +167,10 @@ public sealed class ProcessOutputResourceTests
     private static HashSet<string> PipeLinks()
     {
         var pipes = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var path in Directory.EnumerateFiles("/proc/self/fd"))
+        foreach (var target in Directory.EnumerateFiles("/proc/self/fd").Select(path => new FileInfo(path).LinkTarget).OfType<string>()
+            .Where(target => target.StartsWith("pipe:[", StringComparison.Ordinal)))
         {
-            var target = new FileInfo(path).LinkTarget;
-            if (target is not null && target.StartsWith("pipe:[", StringComparison.Ordinal))
-            {
-                pipes.Add(target);
-            }
+            pipes.Add(target);
         }
 
         return pipes;

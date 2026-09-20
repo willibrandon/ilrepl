@@ -259,15 +259,12 @@ public sealed partial class TypeResolver : IDisposable
                 yield return a;
             }
 
-            foreach (var a in ProcessAssemblies.Current)
+            // Session assemblies are reached only through the owning session's type table, so a
+            // type from another session, a superseded version, or a definition dropped by .reset
+            // never comes back through a name search.
+            foreach (var a in ProcessAssemblies.Current.Where(a => !_extra.Contains(a) && !SessionAssemblies.IsSessionAssembly(a)))
             {
-                // Session assemblies are reached only through the owning session's type table, so a
-                // type from another session, a superseded version, or a definition dropped by .reset
-                // never comes back through a name search.
-                if (!_extra.Contains(a) && !SessionAssemblies.IsSessionAssembly(a))
-                {
-                    yield return a;
-                }
+                yield return a;
             }
         }
     }
@@ -364,9 +361,8 @@ public sealed partial class TypeResolver : IDisposable
 
         if (!clrName.Contains('.'))
         {
-            foreach (var ns in CommonNamespaces)
+            foreach (var candidate in CommonNamespaces.Select(ns => ns + "." + clrName))
             {
-                var candidate = ns + "." + clrName;
                 found = Type.GetType(candidate, throwOnError: false);
                 if (found is not null)
                 {

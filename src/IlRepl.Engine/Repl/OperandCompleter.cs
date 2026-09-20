@@ -320,12 +320,11 @@ public sealed partial class OperandCompleter : IDisposable
         var seen = assemblies.ToHashSet();
         for (var index = 0; index < assemblies.Count; index++)
         {
-            foreach (var target in RuntimeBindingObservations.Capture(assemblies[index]).Values)
+            foreach (var observed in RuntimeBindingObservations.Capture(assemblies[index]).Values
+                .Select(target => RuntimeDefinitions.TypeOf(target.Definition)).OfType<Type>()
+                .Where(observed => seen.Add(observed.Assembly)))
             {
-                if (RuntimeDefinitions.TypeOf(target.Definition) is { } observed && seen.Add(observed.Assembly))
-                {
-                    assemblies.Add(observed.Assembly);
-                }
+                assemblies.Add(observed.Assembly);
             }
         }
 

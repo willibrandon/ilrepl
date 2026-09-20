@@ -142,10 +142,9 @@ public sealed class CilDecorationProvider : ITextDecorationProvider
             }
         }
 
-        foreach (var diagnostic in Diagnostics.Where(d => d.Kind == AnalysisDiagnosticKind.Error
-            && d.Explanation?.Source is null or { Kind: AnalysisSourceKind.Document }))
+        foreach (var location in Diagnostics.Where(d => d.Kind == AnalysisDiagnosticKind.Error
+            && d.Explanation?.Source is null or { Kind: AnalysisSourceKind.Document }).Select(d => d.Location))
         {
-            var location = diagnostic.Location;
             var line = location.Line + 1;
             if (line < Math.Max(1, startLine) || line > last)
             {

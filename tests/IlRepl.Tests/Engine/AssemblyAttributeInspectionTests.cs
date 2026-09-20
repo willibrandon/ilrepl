@@ -12,6 +12,8 @@ namespace IlRepl.Tests.Engine;
 [TestClass]
 public sealed class AssemblyAttributeInspectionTests
 {
+    private static readonly string[] s_dispatches = ["attribute", "extensions"];
+
     private const string Problem = "assembly and module attribute inspection cannot reproduce the original metadata";
     private static readonly string[] Targets = ["Assembly", "Module", "Type", "Member"];
     private static readonly string[] Dispatches = ["instance", "attribute", "extensions", "data", "provider"];
@@ -48,9 +50,8 @@ public sealed class AssemblyAttributeInspectionTests
 
             Assert.HasCount(3, AssemblyAttributeFixture.Apis(target, "provider"));
             Assert.HasCount(1, AssemblyAttributeFixture.Apis(target, "data"));
-            foreach (var dispatch in new[] { "attribute", "extensions" })
+            foreach (var apis in s_dispatches.Select(dispatch => AssemblyAttributeFixture.Apis(target, dispatch)))
             {
-                var apis = AssemblyAttributeFixture.Apis(target, dispatch);
                 foreach (var name in new[] { "GetCustomAttribute", "GetCustomAttributes", "IsDefined" })
                 {
                     Assert.Contains(api => api.Name == name, apis);

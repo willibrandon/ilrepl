@@ -50,12 +50,10 @@ internal sealed class CompletionCandidateSource
             {
                 var comment = view.InBlockComment;
                 var characters = line.ToCharArray();
-                foreach (var segment in CilLexer.Segments(line, ref comment))
+                foreach (var segment in CilLexer.Segments(line, ref comment)
+                    .Where(segment => segment.Kind is CilSegmentKind.BlockComment or CilSegmentKind.LineComment))
                 {
-                    if (segment.Kind is CilSegmentKind.BlockComment or CilSegmentKind.LineComment)
-                    {
-                        characters.AsSpan(segment.Start, segment.Length).Fill(' ');
-                    }
+                    characters.AsSpan(segment.Start, segment.Length).Fill(' ');
                 }
 
                 var syntaxLine = new string(characters);
@@ -429,12 +427,10 @@ internal sealed class CompletionCandidateSource
         }
 
         foreach (var type in CilPrimitives.Keywords.Select(TypeSymbol.Primitive)
-            .Concat(_scope.Generics.TypeArguments).Concat(_scope.Generics.MethodArguments))
+            .Concat(_scope.Generics.TypeArguments).Concat(_scope.Generics.MethodArguments)
+            .Where(type => HintNames(_assemblyHint, type) && seen.Add(type)))
         {
-            if (HintNames(_assemblyHint, type) && seen.Add(type))
-            {
-                AddType(type, SymbolRenderer.Pretty(type), false, arguments, suffix);
-            }
+            AddType(type, SymbolRenderer.Pretty(type), false, arguments, suffix);
         }
     }
 

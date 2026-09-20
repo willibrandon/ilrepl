@@ -103,12 +103,9 @@ internal static class NativeScenarioCapture
                     variable.VariableType = MapType(variable.VariableType);
                 }
 
-                foreach (var handler in body.Body.ExceptionHandlers)
+                foreach (var handler in body.Body.ExceptionHandlers.Where(handler => handler.CatchType is not null))
                 {
-                    if (handler.CatchType is not null)
-                    {
-                        handler.CatchType = MapType(handler.CatchType);
-                    }
+                    handler.CatchType = MapType(handler.CatchType);
                 }
 
                 foreach (var instruction in body.Body.Instructions)

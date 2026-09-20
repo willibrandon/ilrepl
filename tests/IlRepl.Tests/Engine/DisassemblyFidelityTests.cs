@@ -16,6 +16,8 @@ namespace IlRepl.Tests.Engine;
 [TestClass]
 public sealed partial class DisassemblyFidelityTests
 {
+    private static readonly string[] s_headStops = [" extends ", " implements ", " {"];
+
     private const BindingFlags All = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance
         | BindingFlags.DeclaredOnly;
 
@@ -393,21 +395,16 @@ public sealed partial class DisassemblyFidelityTests
         IldasmMethod? current = null;
         var methodDepth = -1;
         var switchOpen = false;
-        foreach (var raw in text.Split('\n'))
+        foreach (var line in text.Split('\n').Select(raw => raw.TrimEnd('\r').Trim()))
         {
-            var line = raw.TrimEnd('\r').Trim();
             if (line.StartsWith(".class ", StringComparison.Ordinal))
             {
                 // The name is the last word before extends or implements, without its generic
                 // parameter list, which may hold spaces, and without quotes.
                 var head = line;
-                foreach (var stop in new[] { " extends ", " implements ", " {" })
+                foreach (var at in s_headStops.Select(stop => head.IndexOf(stop, StringComparison.Ordinal)).Where(at => at >= 0))
                 {
-                    var at = head.IndexOf(stop, StringComparison.Ordinal);
-                    if (at >= 0)
-                    {
-                        head = head[..at];
-                    }
+                    head = head[..at];
                 }
 
                 // A generic parameter list follows the name, after any quotes the name itself carries.

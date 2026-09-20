@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using Hex1b.Input;
 using Hex1b.Tokens;
 using IlRepl.Protocol;
@@ -14,13 +15,11 @@ public static partial class IlReplApp
 
     private static void ObserveInterruptNotice(PromptState prompt, IReadOnlyList<AppliedToken> tokens)
     {
-        foreach (var marker in tokens.Select(token => token.Token).OfType<OscToken>().Where(token => token.Command == "7777"))
+        foreach (var fields in tokens.Select(token => token.Token).OfType<OscToken>().Where(token => token.Command == "7777")
+            .Select(marker => marker.Payload.Split(':'))
+            .Where(fields => fields.Length == 3 && fields[0] == "ilrepl-interrupt" && long.TryParse(fields[2], out _)))
         {
-            var fields = marker.Payload.Split(':');
-            if (fields.Length == 3 && fields[0] == "ilrepl-interrupt" && long.TryParse(fields[2], out var sequence))
-            {
-                prompt.Interruption.FrameFlushed(fields[1], sequence);
-            }
+            prompt.Interruption.FrameFlushed(fields[1], long.Parse(fields[2], CultureInfo.InvariantCulture));
         }
     }
 

@@ -506,9 +506,8 @@ public sealed class AssemblySymbolSource
         LoadedBindingCatalog catalog)
     {
         var parameters = new List<GenericParameterSymbol>();
-        foreach (var handle in handles)
+        foreach (var parameter in handles.Select(handle => _reader.GetGenericParameter(handle)))
         {
-            var parameter = _reader.GetGenericParameter(handle);
             var constraints = parameter.GetConstraints().Select(c => Decode(_reader.GetGenericParameterConstraint(c).Type, owner,
                 catalog)).ToList();
             parameters.Add(new GenericParameterSymbol(ownerId, isMethod, parameter.Index, _reader.GetString(parameter.Name),
@@ -541,13 +540,10 @@ public sealed class AssemblySymbolSource
                 var owner = typeOwner.WithMethod(id, [.. method.GetGenericParameters().Select(ParameterFacts)]);
                 var signature = method.DecodeSignature(provider, owner);
                 var names = new string?[signature.ParameterTypes.Length];
-                foreach (var parameterHandle in method.GetParameters())
+                foreach (var parameter in method.GetParameters().Select(parameterHandle => _reader.GetParameter(parameterHandle))
+                    .Where(parameter => parameter.SequenceNumber >= 1 && parameter.SequenceNumber <= names.Length))
                 {
-                    var parameter = _reader.GetParameter(parameterHandle);
-                    if (parameter.SequenceNumber >= 1 && parameter.SequenceNumber <= names.Length)
-                    {
-                        names[parameter.SequenceNumber - 1] = _reader.GetString(parameter.Name);
-                    }
+                    names[parameter.SequenceNumber - 1] = _reader.GetString(parameter.Name);
                 }
 
                 var exactReturnType = signature.ReturnType;
@@ -709,9 +705,8 @@ public sealed class AssemblySymbolSource
         }
 
         var provider = new SymbolSignatureProvider(this, catalog);
-        foreach (var fieldHandle in definition.GetFields())
+        foreach (var field in definition.GetFields().Select(fieldHandle => _reader.GetFieldDefinition(fieldHandle)))
         {
-            var field = _reader.GetFieldDefinition(fieldHandle);
             if (!field.Attributes.HasFlag(FieldAttributes.Static))
             {
                 return SymbolSignatureProvider.StripModifiers(field.DecodeSignature(provider, OwnerOf(handle)), out _, out _);

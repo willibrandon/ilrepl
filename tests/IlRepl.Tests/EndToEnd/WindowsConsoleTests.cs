@@ -15,6 +15,8 @@ namespace IlRepl.Tests.EndToEnd;
 [TestCategory("Interaction")]
 public sealed class WindowsConsoleTests
 {
+    private static readonly string[] s_recordSuffixes = [".launcher", "", ".exit", ".error", ".stderr"];
+
     /// <summary>
     /// Supplies cancellation for terminal, process, and filesystem synchronization.
     /// </summary>
@@ -188,6 +190,11 @@ public sealed class WindowsConsoleTests
             {
                 foreach (var record in await File.ReadAllLinesAsync(descendants, CancellationToken.None))
                 {
+                    Stop(record);
+                }
+
+                static void Stop(string record)
+                {
                     using var process = ComparisonDescendantSource.Open(record);
                     if (process is { HasExited: false })
                     {
@@ -222,9 +229,8 @@ public sealed class WindowsConsoleTests
         async Task<string> DiagnosticsAsync()
         {
             var output = recorder.Output;
-            foreach (var suffix in new[] { ".launcher", "", ".exit", ".error", ".stderr" })
+            foreach (var path in s_recordSuffixes.Select(suffix => frontendRecord + suffix))
             {
-                var path = frontendRecord + suffix;
                 try
                 {
                     if (File.Exists(path))

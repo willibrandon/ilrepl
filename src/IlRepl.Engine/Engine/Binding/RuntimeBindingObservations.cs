@@ -144,9 +144,8 @@ internal static class RuntimeBindingObservations
             var parameters = owner.Kind == HandleKind.MethodDefinition
                 ? source.Reader.GetMethodDefinition((MethodDefinitionHandle)owner).GetGenericParameters()
                 : source.Reader.GetTypeDefinition((TypeDefinitionHandle)owner).GetGenericParameters();
-            foreach (var handle in parameters)
+            foreach (var row in parameters.Select(handle => source.Reader.GetGenericParameter(handle)))
             {
-                var row = source.Reader.GetGenericParameter(handle);
                 if (row.Index != symbol.Position)
                 {
                     continue;

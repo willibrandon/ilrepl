@@ -49,13 +49,10 @@ internal static class AssemblyResolver
 
             foreach (var import in DependencyAsset.NativeImports(assets[captured.Hash].Image))
             {
-                foreach (var native in Directory.EnumerateFiles(directory).Where(file =>
-                    DependencyAsset.MatchesNativeName(import, Path.GetFileName(file))))
+                foreach (var native in Directory.EnumerateFiles(directory)
+                    .Where(file => DependencyAsset.MatchesNativeName(import, Path.GetFileName(file)) && visited.Add(file)))
                 {
-                    if (visited.Add(native))
-                    {
-                        selected.Add(await DependencyAsset.ReadAsync(native, "native", assets, cancellationToken).ConfigureAwait(false));
-                    }
+                    selected.Add(await DependencyAsset.ReadAsync(native, "native", assets, cancellationToken).ConfigureAwait(false));
                 }
             }
 

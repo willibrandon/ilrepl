@@ -631,9 +631,8 @@ public static class MethodDeclarationParser
         var inner = s.Substring(pos + 1, close - pos - 1).Trim();
         if (inner.Length > 0)
         {
-            foreach (var raw in TypeParser.SplitTopLevel(inner))
+            foreach (var part in TypeParser.SplitTopLevel(inner).Select(raw => StripParameterAttributes(raw)))
             {
-                var part = StripParameterAttributes(raw);
                 if (part == "...")
                 {
                     throw new ReplException("session methods cannot be vararg (only the cell can, with .vararg)");

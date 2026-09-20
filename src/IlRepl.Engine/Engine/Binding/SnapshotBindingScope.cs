@@ -185,13 +185,10 @@ public sealed class SnapshotBindingScope : IBindingScope
                 var matches = new List<TypeSymbol>();
                 foreach (var source in _snapshot.SearchOrder)
                 {
-                    foreach (var handle in source.Index.VisibleNamed(typeName))
+                    foreach (var candidate in source.Index.VisibleNamed(typeName).Select(handle => source.Definition(handle))
+                        .Where(candidate => !matches.Contains(candidate)))
                     {
-                        var candidate = source.Definition(handle);
-                        if (!matches.Contains(candidate))
-                        {
-                            matches.Add(candidate);
-                        }
+                        matches.Add(candidate);
                     }
                 }
 

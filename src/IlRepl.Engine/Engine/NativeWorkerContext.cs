@@ -158,9 +158,8 @@ public sealed class NativeWorkerContext : IDisposable
         {
             using var pe = new PEReader(new MemoryStream(image.Image, writable: false));
             var reader = pe.GetMetadataReader();
-            foreach (var handle in reader.TypeDefinitions)
+            foreach (var type in reader.TypeDefinitions.Select(handle => reader.GetTypeDefinition(handle)))
             {
-                var type = reader.GetTypeDefinition(handle);
                 if (reader.GetString(type.Name) != "<Module>")
                 {
                     continue;

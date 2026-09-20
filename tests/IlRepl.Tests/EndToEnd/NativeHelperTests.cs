@@ -27,14 +27,11 @@ public sealed partial class NativeHelperTests
         using var image = new PEReader(stream);
         var reader = image.GetMetadataReader();
         var called = new SortedSet<string>(StringComparer.Ordinal);
-        foreach (var handle in reader.MethodDefinitions)
+        foreach (var import in reader.MethodDefinitions.Select(handle => reader.GetMethodDefinition(handle).GetImport())
+            .Where(import => !import.Module.IsNil && reader.GetString(reader.GetModuleReference(import.Module).Name)
+                .Contains("hex1binterop", StringComparison.OrdinalIgnoreCase)))
         {
-            var import = reader.GetMethodDefinition(handle).GetImport();
-            if (!import.Module.IsNil && reader.GetString(reader.GetModuleReference(import.Module).Name)
-                .Contains("hex1binterop", StringComparison.OrdinalIgnoreCase))
-            {
-                called.Add(reader.GetString(import.Name));
-            }
+            called.Add(reader.GetString(import.Name));
         }
 
         Assert.IsNotEmpty(called, "The Hex1b assembly is expected to call its native helper by name.");

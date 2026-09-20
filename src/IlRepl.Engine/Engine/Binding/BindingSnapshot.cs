@@ -235,12 +235,9 @@ public sealed class BindingSnapshot : IDisposable
     {
         ArgumentNullException.ThrowIfNull(session);
         var own = new List<Assembly>();
-        foreach (var type in session.Types)
+        foreach (var definition in session.Types.Select(type => type.Definition).OfType<DefinitionAssembly>())
         {
-            if (type.Definition is { } definition)
-            {
-                own.Add(definition.Assembly);
-            }
+            own.Add(definition.Assembly);
         }
 
         foreach (var method in session.Methods)
@@ -323,12 +320,10 @@ public sealed class BindingSnapshot : IDisposable
         Take(coreLibAssembly, searched: false);
         for (var index = 0; index < ordered.Count; index++)
         {
-            foreach (var target in RuntimeBindingObservations.Capture(ordered[index].Assembly).Values)
+            foreach (var observed in RuntimeBindingObservations.Capture(ordered[index].Assembly).Values
+                .Select(target => RuntimeDefinitions.TypeOf(target.Definition)).OfType<Type>())
             {
-                if (RuntimeDefinitions.TypeOf(target.Definition) is { } observed)
-                {
-                    Take(observed.Assembly, searched: false);
-                }
+                Take(observed.Assembly, searched: false);
             }
         }
 

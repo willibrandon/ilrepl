@@ -13,6 +13,7 @@ namespace IlRepl.Tests.Engine;
 /// </summary>
 internal sealed class ExportExecution : IDisposable
 {
+    private static readonly string[] s_inherited = ["PATH", "SystemRoot", "WINDIR", "COMSPEC", "LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH"];
     private readonly string _directory = Directory.CreateDirectory(
         Path.Join(AppContext.BaseDirectory, "artifacts", "export-conformance", Guid.NewGuid().ToString("N"))).FullName;
     private readonly string _workingDirectory;
@@ -129,12 +130,9 @@ internal sealed class ExportExecution : IDisposable
 
         var comparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
         var variables = new Dictionary<string, string>(comparer);
-        foreach (var name in new[] { "PATH", "SystemRoot", "WINDIR", "COMSPEC", "LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH" })
+        foreach (var name in s_inherited.Where(name => Environment.GetEnvironmentVariable(name) is not null))
         {
-            if (Environment.GetEnvironmentVariable(name) is { } value)
-            {
-                variables[name] = value;
-            }
+            variables[name] = Environment.GetEnvironmentVariable(name)!;
         }
 
         var home = Directory.CreateDirectory(Path.Join(_directory, "home")).FullName;

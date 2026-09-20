@@ -433,14 +433,11 @@ public sealed partial class Session
             MapOld(oldType);
         }
 
-        foreach (var generation in oldPrototypes)
+        // The accepted family's prototypes, and the ones the edited block just built, both
+        // appear in bodies and declarations that are replayed or shaped.
+        foreach (var generation in oldPrototypes.Where(generation => generation.ContainsKey(declaration.FullName)))
         {
-            // The accepted family's prototypes, and the ones the edited block just built, both
-            // appear in bodies and declarations that are replayed or shaped.
-            if (generation.TryGetValue(declaration.FullName, out var oldPrototype))
-            {
-                MapOld(oldPrototype.Prototype);
-            }
+            MapOld(generation[declaration.FullName].Prototype);
         }
 
         foreach (var nested in declaration.NestedTypes)
@@ -496,16 +493,14 @@ public sealed partial class Session
             }
         }
 
-        foreach (var field in declaration.Fields)
+        foreach (var mapped in declaration.Fields.Select(field => field with
         {
-            var mapped = field with
-            {
-                Type = map.Map(field.Type),
-                ExactType = field.ExactType is null ? null : map.Map(field.ExactType),
-                RequiredModifiers = [.. field.RequiredModifiers.Select(map.Map)],
-                OptionalModifiers = [.. field.OptionalModifiers.Select(map.Map)],
-            };
-
+            Type = map.Map(field.Type),
+            ExactType = field.ExactType is null ? null : map.Map(field.ExactType),
+            RequiredModifiers = [.. field.RequiredModifiers.Select(map.Map)],
+            OptionalModifiers = [.. field.OptionalModifiers.Select(map.Map)],
+        }))
+        {
             var fieldBuilder = builder.DefineField(mapped.Name, mapped.Type, [.. mapped.RequiredModifiers], [.. mapped.OptionalModifiers],
                 mapped.Attributes);
             if (mapped.Offset is { } offset)
@@ -516,20 +511,18 @@ public sealed partial class Session
             own.AddForward(mapped, fieldBuilder);
         }
 
-        foreach (var method in declaration.Methods)
+        foreach (var mapped in declaration.Methods.Select(method => MapSignature(method.Signature, map)))
         {
-            var signature = MapSignature(method.Signature, map);
-            var methodBuilder = DefineMethodBuilder(builder, signature, out var methodGenerics);
+            var methodBuilder = DefineMethodBuilder(builder, mapped, out var methodGenerics);
+            var signature = mapped;
             if (methodGenerics.Length > 0)
             {
                 // The signature's own parameters are the old method's; the builder's replace them by position.
                 var methodMap = new EmitMap(_ => throw new InvalidOperationException("no session methods are mapped here"));
-                foreach (var old in SignatureIdentity.MethodParametersOf(signature))
+                foreach (var old in SignatureIdentity.MethodParametersOf(signature).OfType<Type>()
+                    .Where(old => old.GenericParameterPosition < methodGenerics.Length))
                 {
-                    if (old is not null && old.GenericParameterPosition < methodGenerics.Length)
-                    {
-                        methodMap.Add(old, methodGenerics[old.GenericParameterPosition]);
-                    }
+                    methodMap.Add(old, methodGenerics[old.GenericParameterPosition]);
                 }
 
                 signature = MapSignature(signature, methodMap);

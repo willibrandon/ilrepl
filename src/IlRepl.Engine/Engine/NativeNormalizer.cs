@@ -105,9 +105,8 @@ public static partial class NativeNormalizer
                 }
             }
 
-            foreach (Match relocation in OtherRelocation().Matches(line))
+            foreach (var operand in OtherRelocation().Matches(line).Select(relocation => relocation.Groups[1]))
             {
-                var operand = relocation.Groups[1];
                 if (!TryNumber(operand.Value, out var value))
                 {
                     continue;

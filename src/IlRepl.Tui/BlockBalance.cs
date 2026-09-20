@@ -33,9 +33,8 @@ public static class BlockBalance
         var comment = inBlockComment;
         var inString = false;
         var awaiting = awaitingBrace;
-        foreach (var raw in text.Split('\n'))
+        foreach (var line in text.Split('\n').Select(raw => raw.TrimEnd('\r')))
         {
-            var line = raw.TrimEnd('\r');
             inString = false;
             var segments = CilLexer.Segments(line, ref comment);
 

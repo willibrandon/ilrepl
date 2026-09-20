@@ -54,9 +54,8 @@ public sealed class CompletionSpellingTests
 
         using var snapshot = BindingSnapshot.Capture(session);
         var speller = new TypeSpeller(new SnapshotBindingScope(snapshot));
-        foreach (var family in session.Types)
+        foreach (var type in session.Types.Select(family => family.RuntimeType!))
         {
-            var type = family.RuntimeType!;
             var spelling = speller.Spell(RuntimeSymbolImporter.Import(type));
             Assert.AreEqual(type, TypeParser.Parse(spelling, session.State.Context), spelling);
             if (type.Name == "Item")

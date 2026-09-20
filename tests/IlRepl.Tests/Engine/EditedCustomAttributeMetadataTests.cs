@@ -67,9 +67,8 @@ public sealed class EditedCustomAttributeMetadataTests
             try
             {
                 var assembly = context.LoadImage(image);
-                foreach (var source in new[] { method, alias })
+                foreach (var exported in new[] { method, alias }.Select(source => Exported(assembly, source)))
                 {
-                    var exported = Exported(assembly, source);
                     AssertData(exported, added: false);
                     AssertInstances(exported, added: false);
                     Assert.AreEqual(42, exported.Invoke(null, [42]));
@@ -129,9 +128,9 @@ public sealed class EditedCustomAttributeMetadataTests
             Assert.AreEqual(42, target.Invoke(null, [42, 99]));
         }
 
-        foreach (var image in new[] { AssemblyExporter.Write(session, "added-custom"), IlasmLocator.Assemble(session.ToIlAsm()) })
+        foreach (var assembly in new[] { AssemblyExporter.Write(session, "added-custom"), IlasmLocator.Assemble(session.ToIlAsm()) }
+            .Select(image => Assembly.Load(image)))
         {
-            var assembly = Assembly.Load(image);
             foreach (var target in new[] { method, alias })
             {
                 AssertData(Exported(assembly, target), added: true, redefined: true);

@@ -195,9 +195,8 @@ public sealed class PrivateVarArgEditTests
         Assert.AreEqual("different", compared.Outcome, compared.Original.Detail + "; " + compared.Edited.Detail);
         Assert.AreEqual("43", compared.Original.Result!.Value);
         Assert.AreEqual("44", compared.Edited.Result!.Value);
-        foreach (var side in new[] { compared.Original, compared.Edited })
+        foreach (var inputs in new[] { compared.Original, compared.Edited }.Select(side => side.Invocations.Single().Inputs))
         {
-            var inputs = side.Invocations.Single().Inputs;
             Assert.AreEqual("7", inputs.Single(member => member.Name == "argument 1").Value.Value);
             Assert.AreEqual("9", inputs.Single(member => member.Name == "argument 2").Value.Value);
         }

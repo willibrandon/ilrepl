@@ -111,9 +111,9 @@ public sealed class EditedParameterDefaultTests
             try
             {
                 var assembly = context.LoadImage(image);
-                foreach (var source in new[] { edit.Method!, session.TypeTable.MethodAliases[edit.Name] })
+                foreach (var method in new[] { edit.Method!, session.TypeTable.MethodAliases[edit.Name] }
+                    .Select(source => ExportedMethod(assembly, source)))
                 {
-                    var method = ExportedMethod(assembly, source);
                     var parameter = Assert.ContainsSingle(method.GetParameters());
                     Assert.IsTrue(parameter.HasDefaultValue);
                     Assert.IsNull(parameter.RawDefaultValue);
@@ -248,9 +248,8 @@ public sealed class EditedParameterDefaultTests
             try
             {
                 var assembly = context.LoadImage(image);
-                foreach (var source in new[] { edit.Method!, alias })
+                foreach (var method in new[] { edit.Method!, alias }.Select(source => ExportedMethod(assembly, source)))
                 {
-                    var method = ExportedMethod(assembly, source);
                     AssertDefault(method, 8, optional);
                     Assert.AreEqual(8, method.Invoke(null, [Type.Missing]));
                 }

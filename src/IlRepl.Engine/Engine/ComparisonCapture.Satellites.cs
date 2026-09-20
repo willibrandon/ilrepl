@@ -20,9 +20,8 @@ public static partial class ComparisonCapture
     {
         var parents = dependencies.Values.ToArray();
         var names = parents.Select(parent => new AssemblyName(parent.Name)).ToArray();
-        foreach (var assembly in source.Assemblies.ToArray())
+        foreach (var name in source.Assemblies.ToArray().Select(assembly => assembly.GetName()))
         {
-            var name = assembly.GetName();
             if (string.IsNullOrEmpty(name.CultureName) || !names.Any(parent =>
                 string.Equals(name.Name, parent.Name + ".resources", StringComparison.OrdinalIgnoreCase)
                 && name.GetPublicKeyToken().AsSpan().SequenceEqual(parent.GetPublicKeyToken())))

@@ -328,6 +328,11 @@ public sealed class EditableBodyTests
         var session = AssertRangeBody(body, (0, 42));
         foreach (var image in Images(session))
         {
+            AssertEmitted(image);
+        }
+
+        static void AssertEmitted(byte[] image)
+        {
             using var moduleStream = new MemoryStream(image);
             using var module = ModuleDefinition.ReadModule(moduleStream);
             var emitted = FindMethod(module).Body;

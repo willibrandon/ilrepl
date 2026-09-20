@@ -100,9 +100,8 @@ public sealed class FileHistoryStore : IHistoryStore
 
         var entries = new List<string>();
         List<string>? current = null;
-        foreach (var raw in content.Split('\n'))
+        foreach (var line in content.Split('\n').Select(raw => raw.TrimEnd('\r')))
         {
-            var line = raw.TrimEnd('\r');
             if (line.StartsWith('+'))
             {
                 current ??= [];

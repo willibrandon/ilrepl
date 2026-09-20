@@ -257,10 +257,15 @@ public sealed class NativeWorkloadProcessTests
             {
                 foreach (var descendant in await File.ReadAllLinesAsync(record, CancellationToken.None))
                 {
+                    await StopAsync(descendant);
+                }
+
+                static async Task StopAsync(string descendant)
+                {
                     using var process = ComparisonDescendantSource.Open(descendant);
                     if (process is null || process.HasExited)
                     {
-                        continue;
+                        return;
                     }
 
                     process.Kill(entireProcessTree: true);

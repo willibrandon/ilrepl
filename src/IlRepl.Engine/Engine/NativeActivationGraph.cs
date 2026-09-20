@@ -73,12 +73,10 @@ internal static class NativeActivationGraph
                 VisitType(local.LocalType);
             }
 
-            foreach (var clause in body.ExceptionHandlingClauses)
+            foreach (var caught in body.ExceptionHandlingClauses.Where(clause => clause.Flags == ExceptionHandlingClauseOptions.Clause)
+                .Select(clause => clause.CatchType).OfType<Type>())
             {
-                if (clause.Flags == ExceptionHandlingClauseOptions.Clause && clause.CatchType is { } caught)
-                {
-                    VisitType(caught);
-                }
+                VisitType(caught);
             }
 
             foreach (var instruction in IlReader.Read(body.GetILAsByteArray()!).Instructions)

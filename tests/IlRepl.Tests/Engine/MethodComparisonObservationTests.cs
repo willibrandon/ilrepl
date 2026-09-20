@@ -86,9 +86,8 @@ public sealed class MethodComparisonObservationTests
         var result = await Run(session, "Copy ()");
 
         Assert.AreEqual("match", result.Outcome, Details(result));
-        foreach (var side in new[] { result.Original, result.Edited })
+        foreach (var value in new[] { result.Original, result.Edited }.Select(side => side.Result!))
         {
-            var value = side.Result!;
             Assert.AreEqual("array", value.Kind);
             Assert.HasCount(1, value.Members);
             Assert.AreEqual("reference", value.Members[0].Value.Kind);

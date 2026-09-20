@@ -97,9 +97,8 @@ public static class GenericConstraints
             return false;
         }
 
-        foreach (var constraint in parameter.Constraints)
+        foreach (var target in parameter.Constraints.Select(constraint => substitute(constraint)))
         {
-            var target = substitute(constraint);
             if (!SatisfiesTypeConstraint(argument, target, scope, []))
             {
                 return false;

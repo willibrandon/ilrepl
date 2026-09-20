@@ -556,12 +556,9 @@ public sealed partial class Session
 
         _edits.Clear();
         _open = null;
-        foreach (var type in _types)
+        foreach (var definition in _types.Select(type => type.Definition).OfType<DefinitionAssembly>())
         {
-            if (type.Definition is { } definition)
-            {
-                SessionAssemblies.Release(definition);
-            }
+            SessionAssemblies.Release(definition);
         }
 
         _types.Clear();
@@ -890,13 +887,10 @@ public sealed partial class Session
         {
             foreach (var declaration in family.Declaration.Family)
             {
-                foreach (var method in declaration.Methods)
+                foreach (var body in declaration.Methods.Select(method => method.Body).OfType<CellState>())
                 {
-                    if (method.Body is { } body)
-                    {
-                        RequireCompatibleReferences(body, $"{declaration.KindWord} {declaration.FullName}", replacement,
-                            "(the previous definition stays)");
-                    }
+                    RequireCompatibleReferences(body, $"{declaration.KindWord} {declaration.FullName}", replacement,
+                        "(the previous definition stays)");
                 }
             }
         }

@@ -475,9 +475,8 @@ internal sealed partial class ImportedMethodFamily
             ReportType(catchType, MemberResolver.Describe(body.Method) + ": catch " + TypeNameFormatter.Pretty(catchType));
         }
 
-        foreach (var entry in body.State.Entries.Where(entry => entry.Instruction is not null))
+        foreach (var instruction in (body.State.Entries.Where(entry => entry.Instruction is not null)).Select(entry => entry.Instruction!))
         {
-            var instruction = entry.Instruction!;
             var location = MemberResolver.Describe(body.Method) + ": " + instruction.Text;
             switch (instruction.Operand)
             {
@@ -613,9 +612,9 @@ internal sealed partial class ImportedMethodFamily
     {
         foreach (var body in _methods.Values.OfType<MethodEditBody>())
         {
-            foreach (var entry in body.State.Entries.Where(entry => entry.Instruction is not null))
+            foreach (var instruction in (body.State.Entries.Where(entry => entry.Instruction is not null))
+                .Select(entry => entry.Instruction!))
             {
-                var instruction = entry.Instruction!;
                 string? problem = null;
                 switch (instruction.Operand)
                 {

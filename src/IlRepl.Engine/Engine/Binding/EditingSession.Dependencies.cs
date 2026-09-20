@@ -61,9 +61,8 @@ public sealed partial class EditingSession
             yield return type;
         }
 
-        foreach (var instruction in body.Instructions)
+        foreach (var operand in body.Instructions.Select(instruction => instruction.Operand))
         {
-            var operand = instruction.Operand;
             if (operand.Type is { } type)
             {
                 yield return operand.ExactType ?? type;

@@ -107,7 +107,12 @@ public sealed class VirtualComparisonTests
         var package = ComparisonCapture.Create(session, "Copy using Scenario");
         foreach (var image in new[] { package.Original, package.Edited })
         {
-            using var moduleStream = new MemoryStream(image.Image);
+            AssertMethods(image.Image);
+        }
+
+        void AssertMethods(byte[] image)
+        {
+            using var moduleStream = new MemoryStream(image);
             using var module = ModuleDefinition.ReadModule(moduleStream);
             var owner = module.GetTypes().Single(type => type.Namespace == "IlRepl.Edits.Copy"
                 && type.Name == (generic ? "Owner`1" : "Owner"));

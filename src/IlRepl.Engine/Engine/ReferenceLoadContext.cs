@@ -330,21 +330,19 @@ internal sealed class ReferenceLoadContext : AssemblyLoadContext
 
             foreach (var directory in _paths.Values.Select(Path.GetDirectoryName).Distinct())
             {
-                foreach (var name in new[]
-                {
+                string[] names =
+                [
                     unmanagedDllName,
                     unmanagedDllName + ".dll",
                     unmanagedDllName + ".so",
                     "lib" + unmanagedDllName,
                     "lib" + unmanagedDllName + ".so",
                     "lib" + unmanagedDllName + ".dylib",
-                })
+                ];
+
+                if (names.Select(name => Path.Join(directory!, name)).FirstOrDefault(File.Exists) is { } found)
                 {
-                    var candidate = Path.Join(directory!, name);
-                    if (File.Exists(candidate))
-                    {
-                        return LoadUnmanagedDllFromPath(candidate);
-                    }
+                    return LoadUnmanagedDllFromPath(found);
                 }
             }
 

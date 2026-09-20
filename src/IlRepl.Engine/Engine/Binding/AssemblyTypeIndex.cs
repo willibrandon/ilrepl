@@ -213,13 +213,7 @@ public sealed class AssemblyTypeIndex
 
     private IEnumerable<TypeIndexEntry> ReadEntries()
     {
-        foreach (var handle in _source.Reader.TypeDefinitions)
-        {
-            if (EntryOf(handle) is { } entry)
-            {
-                yield return entry;
-            }
-        }
+        return _source.Reader.TypeDefinitions.Select(EntryOf).OfType<TypeIndexEntry>();
     }
 
     /// <summary>

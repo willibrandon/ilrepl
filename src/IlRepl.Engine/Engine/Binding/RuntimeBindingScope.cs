@@ -57,14 +57,11 @@ public sealed class RuntimeBindingScope : IBindingScope
     public IReadOnlyList<PropertySymbol> Properties(TypeSymbol declaring)
     {
         var type = TypeOf(declaring);
-        var sources = new List<(Assembly Assembly, AssemblySymbolSource Source)>();
-        foreach (var assembly in Context.Resolver.Assemblies)
-        {
-            if (AssemblySymbolSource.For(assembly) is { } source)
-            {
-                sources.Add((assembly, source));
-            }
-        }
+        var sources = Context.Resolver.Assemblies
+            .Select(assembly => (Assembly: assembly, Source: AssemblySymbolSource.For(assembly)))
+            .Where(pair => pair.Source is not null)
+            .Select(pair => (pair.Assembly, Source: pair.Source!))
+            .ToList();
 
         var catalog = new LoadedBindingCatalog(sources);
         return [.. type.GetProperties(AllMembers).Select(property => ImportProperty(property, catalog))];

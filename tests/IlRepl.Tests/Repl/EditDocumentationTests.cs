@@ -83,9 +83,8 @@ public sealed class EditDocumentationTests
         AssertDifferent(comparison);
         Assert.AreEqual("first", comparison.Original.Result!.Value);
         Assert.AreEqual("second", comparison.Edited.Result!.Value);
-        foreach (var side in new[] { comparison.Original, comparison.Edited })
+        foreach (var inputs in new[] { comparison.Original, comparison.Edited }.Select(side => side.Invocations.Single().Inputs))
         {
-            var inputs = side.Invocations.Single().Inputs;
             var first = inputs.Single(member => member.Name == "argument 0").Value;
             var second = inputs.Single(member => member.Name == "argument 1").Value;
             Assert.AreEqual("[System.Private.CoreLib]System.String", first.Type);

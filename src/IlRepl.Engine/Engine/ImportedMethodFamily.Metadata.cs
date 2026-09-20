@@ -152,12 +152,9 @@ internal sealed partial class ImportedMethodFamily
             FillType(type, (TypeDefinition)definitions[type], definitions, writer);
         }
 
-        foreach (var pair in _methods)
+        foreach (var (method, body) in _methods.Where(pair => pair.Value is not null))
         {
-            if (pair.Value is { } body)
-            {
-                CecilBodyEmitter.Emit((MethodDefinition)definitions[pair.Key], body.State, writer, EmitMap.ForSessionMethods(_pinned));
-            }
+            CecilBodyEmitter.Emit((MethodDefinition)definitions[method], body!.State, writer, EmitMap.ForSessionMethods(_pinned));
         }
 
         WriteTypeLookups(writer, definitions);
@@ -407,14 +404,12 @@ internal sealed partial class ImportedMethodFamily
             CopyAttributes(parameter.GetCustomAttributesData(), copy, writer);
         }
 
-        foreach (var entry in body?.State.Entries ?? [])
+        foreach (var entry in (body?.State.Entries ?? []).Where(entry => entry.Kind == EntryKind.Param && entry.ParamIndex > 0
+            && entry.ParamHasDefault))
         {
-            if (entry.Kind == EntryKind.Param && entry.ParamIndex is > 0 and { } index && entry.ParamHasDefault)
-            {
-                var parameter = definition.Parameters[index - 1];
-                parameter.Constant = entry.ParamDefault;
-                parameter.HasDefault = true;
-            }
+            var parameter = definition.Parameters[entry.ParamIndex!.Value - 1];
+            parameter.Constant = entry.ParamDefault;
+            parameter.HasDefault = true;
         }
 
         if (original is MethodInfo method)

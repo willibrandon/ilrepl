@@ -111,13 +111,11 @@ public static partial class ComparisonWorker
             ready();
             if (image.OriginalAssembly is { } identity)
             {
-                foreach (var satellite in package.Dependencies)
+                foreach (var name in package.Dependencies.Select(satellite => new AssemblyName(satellite.Name))
+                    .Where(name => !string.IsNullOrEmpty(name.CultureName))
+                    .Where(name => name.Name?.EndsWith(".resources", StringComparison.Ordinal) == true))
                 {
-                    var name = new AssemblyName(satellite.Name);
-                    if (!string.IsNullOrEmpty(name.CultureName) && name.Name?.EndsWith(".resources", StringComparison.Ordinal) == true)
-                    {
-                        Resolve(executionContext, name);
-                    }
+                    Resolve(executionContext, name);
                 }
 
                 foreach (var parent in package.Dependencies)

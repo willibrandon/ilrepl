@@ -962,19 +962,11 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
                 continue;
             }
 
-            foreach (var path in ExpandFilterPaths(paths))
+            foreach (var transformation in ExpandFilterPaths(paths)
+                .Select(path => path with { Values = [], PendingUnwindEffect = null, StackUnknown = true })
+                .Where(transformation => !transformations.Any(candidate => SameFilterPath(candidate, transformation))))
             {
-                var transformation = path with
-                {
-                    Values = [],
-                    PendingUnwindEffect = null,
-                    StackUnknown = true,
-                };
-
-                if (!transformations.Any(candidate => SameFilterPath(candidate, transformation)))
-                {
-                    transformations.Add(transformation);
-                }
+                transformations.Add(transformation);
             }
         }
 
@@ -1243,12 +1235,14 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
         Dictionary<int, (bool Completes, ConstructorThisState ConstructorState,
             FilterPathState[] Transformations)>? effects)
     {
-        foreach (var handler in handlers)
+        if (effects is null)
         {
-            if (effects?.TryGetValue(handler, out var effect) == true && effect.Completes)
-            {
-                state = ApplyConstructorEffect(state, effect.ConstructorState);
-            }
+            return state;
+        }
+
+        foreach (var effect in handlers.Where(effects.ContainsKey).Select(handler => effects[handler]).Where(effect => effect.Completes))
+        {
+            state = ApplyConstructorEffect(state, effect.ConstructorState);
         }
 
         return state;
@@ -1622,9 +1616,8 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
 
         var transformations = new List<FilterPathState>();
         var handlerEntries = new Dictionary<int, List<FilterPathState>>();
-        foreach (var path in paths)
+        foreach (var effect in paths.Select(path => path.PendingUnwindEffect))
         {
-            var effect = path.PendingUnwindEffect;
             AddFilterPaths(transformations, effect?.Transformations ?? IdentityReceiverTransformations);
             if (effect is null)
             {
@@ -1871,18 +1864,11 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
         FilterPathState[] following)
     {
         var result = new List<FilterPathState>();
-        foreach (var left in ExpandFilterPaths(preceding))
+        var composed = ExpandFilterPaths(preceding).SelectMany(left => ExpandFilterPaths(following)
+            .Select(right => TryComposeReceiverTransformation(left, right, out var path) ? path : null)).OfType<FilterPathState>();
+        foreach (var path in composed.Where(path => !result.Any(candidate => SameFilterPath(candidate, path))))
         {
-            foreach (var right in ExpandFilterPaths(following))
-            {
-                if (TryComposeReceiverTransformation(left, right, out var composed))
-                {
-                    if (!result.Any(candidate => SameFilterPath(candidate, composed)))
-                    {
-                        result.Add(composed);
-                    }
-                }
-            }
+            result.Add(path);
         }
 
         return result.Count > MaxFilterPaths ? CollapseFilterPaths([.. result]) : [.. result];
@@ -1893,18 +1879,12 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
         FilterPathState[] transformations)
     {
         var result = new List<FilterPathState>();
-        foreach (var input in ExpandFilterPaths(inputs))
+        var applied = ExpandFilterPaths(inputs).SelectMany(input => ExpandFilterPaths(transformations)
+            .Select(transformation => TryApplyReceiverTransformation(input, transformation, out var path) ? path : null))
+            .OfType<FilterPathState>();
+        foreach (var path in applied.Where(path => !result.Any(candidate => SameFilterPath(candidate, path))))
         {
-            foreach (var transformation in ExpandFilterPaths(transformations))
-            {
-                if (TryApplyReceiverTransformation(input, transformation, out var output))
-                {
-                    if (!result.Any(candidate => SameFilterPath(candidate, output)))
-                    {
-                        result.Add(output);
-                    }
-                }
-            }
+            result.Add(path);
         }
 
         return result.Count > MaxFilterPaths ? CollapseFilterPaths([.. result]) : [.. result];
@@ -3562,9 +3542,8 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
                 continue;
             }
 
-            foreach (var origin in popped[position].Origins)
+            foreach (var producer in popped[position].Origins.Select(origin => graph.Nodes[origin].Instruction))
             {
-                var producer = graph.Nodes[origin].Instruction;
                 var slot = producer?.ArgumentIndex ?? producer?.LocalIndex;
                 var isArgument = producer is not null && LoadsArgumentAddress(producer);
                 if (slot is null || !isArgument && (producer is null || !LoadsLocalAddress(producer)))

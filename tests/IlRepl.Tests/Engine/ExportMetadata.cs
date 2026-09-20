@@ -20,9 +20,8 @@ internal static class ExportMetadata
         var reader = pe.GetMetadataReader();
         var provider = new ExportSignatureProvider();
         var records = new List<string>();
-        foreach (var handle in reader.AssemblyReferences)
+        foreach (var reference in reader.AssemblyReferences.Select(handle => reader.GetAssemblyReference(handle)))
         {
-            var reference = reader.GetAssemblyReference(handle);
             records.Add("reference " + reader.GetString(reference.Name) + " " + reference.Version + " "
                 + Convert.ToHexString(reader.GetBlobBytes(reference.PublicKeyOrToken)) + " "
                 + reader.GetString(reference.Culture) + " " + reference.Flags);
@@ -53,9 +52,8 @@ internal static class ExportMetadata
                 records.Add(name + " override " + Method(implementation.MethodDeclaration) + " -> " + Method(implementation.MethodBody));
             }
 
-            foreach (var propertyHandle in definition.GetProperties())
+            foreach (var property in definition.GetProperties().Select(propertyHandle => reader.GetPropertyDefinition(propertyHandle)))
             {
-                var property = reader.GetPropertyDefinition(propertyHandle);
                 var propertyName = name + "::" + reader.GetString(property.Name);
                 records.Add("property " + propertyName + " " + property.Attributes + " "
                     + ExportSignatureProvider.Method(property.DecodeSignature(provider, null)));
@@ -65,9 +63,8 @@ internal static class ExportMetadata
                 Attributes(propertyName, property.GetCustomAttributes());
             }
 
-            foreach (var eventHandle in definition.GetEvents())
+            foreach (var value in definition.GetEvents().Select(eventHandle => reader.GetEventDefinition(eventHandle)))
             {
-                var value = reader.GetEventDefinition(eventHandle);
                 var eventName = name + "::" + reader.GetString(value.Name);
                 records.Add("event " + eventName + " " + value.Attributes + " " + provider.Type(reader, value.Type));
                 var accessors = value.GetAccessors();
@@ -76,26 +73,23 @@ internal static class ExportMetadata
                 Attributes(eventName, value.GetCustomAttributes());
             }
 
-            foreach (var fieldHandle in definition.GetFields())
+            foreach (var field in definition.GetFields().Select(fieldHandle => reader.GetFieldDefinition(fieldHandle)))
             {
-                var field = reader.GetFieldDefinition(fieldHandle);
                 var fieldName = name + "::" + reader.GetString(field.Name);
                 records.Add($"field {fieldName} {field.Attributes} {field.DecodeSignature(provider, null)} offset {field.GetOffset()}");
                 Constant(fieldName, field.GetDefaultValue());
                 Attributes(fieldName, field.GetCustomAttributes());
             }
 
-            foreach (var methodHandle in definition.GetMethods())
+            foreach (var method in definition.GetMethods().Select(methodHandle => reader.GetMethodDefinition(methodHandle)))
             {
-                var method = reader.GetMethodDefinition(methodHandle);
                 var methodName = name + "::" + reader.GetString(method.Name) + " "
                     + ExportSignatureProvider.Method(method.DecodeSignature(provider, null));
                 records.Add($"method {methodName} {method.Attributes} {method.ImplAttributes}");
                 Generics(methodName, method.GetGenericParameters());
                 Attributes(methodName, method.GetCustomAttributes());
-                foreach (var parameterHandle in method.GetParameters())
+                foreach (var parameter in method.GetParameters().Select(parameterHandle => reader.GetParameter(parameterHandle)))
                 {
-                    var parameter = reader.GetParameter(parameterHandle);
                     var parameterName = methodName + " parameter " + parameter.SequenceNumber;
                     records.Add(parameterName + " " + parameter.Attributes + " " + reader.GetString(parameter.Name));
                     Constant(parameterName, parameter.GetDefaultValue());
@@ -191,9 +185,8 @@ internal static class ExportMetadata
 
         void Generics(string owner, GenericParameterHandleCollection parameters)
         {
-            foreach (var parameterHandle in parameters)
+            foreach (var parameter in parameters.Select(parameterHandle => reader.GetGenericParameter(parameterHandle)))
             {
-                var parameter = reader.GetGenericParameter(parameterHandle);
                 var constraints = parameter.GetConstraints().Select(constraint =>
                     provider.Type(reader, reader.GetGenericParameterConstraint(constraint).Type)).Order(StringComparer.Ordinal);
                 records.Add(owner + " generic " + parameter.Index + " " + reader.GetString(parameter.Name)
@@ -214,9 +207,8 @@ internal static class ExportMetadata
 
         void Attributes(string owner, CustomAttributeHandleCollection attributes)
         {
-            foreach (var attributeHandle in attributes)
+            foreach (var attribute in attributes.Select(attributeHandle => reader.GetCustomAttribute(attributeHandle)))
             {
-                var attribute = reader.GetCustomAttribute(attributeHandle);
                 var type = attribute.Constructor.Kind == HandleKind.MemberReference
                     ? reader.GetMemberReference((MemberReferenceHandle)attribute.Constructor).Parent
                     : reader.GetMethodDefinition((MethodDefinitionHandle)attribute.Constructor).GetDeclaringType();

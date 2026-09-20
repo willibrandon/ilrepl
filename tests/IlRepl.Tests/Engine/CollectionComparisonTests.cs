@@ -40,9 +40,8 @@ public sealed class CollectionComparisonTests
         var same = await ProcessComparisonRunner.RunAsync(ComparisonCapture.Create(session, "Copy ()"),
             TestContext.CancellationToken);
         Assert.AreEqual("match", same.Outcome, same.Original.Detail + "; " + same.Edited.Detail);
-        foreach (var side in new[] { same.Original, same.Edited })
+        foreach (var value in new[] { same.Original, same.Edited }.Select(side => side.Result!))
         {
-            var value = side.Result!;
             Assert.AreEqual(set ? "set" : "dictionary", value.Kind);
             Assert.HasCount(3, value.Members);
             Assert.AreEqual("comparer", value.Members[0].Name);

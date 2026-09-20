@@ -336,26 +336,19 @@ public sealed class ImportedMetadataTests
         var type = reader.TypeDefinitions.Select(reader.GetTypeDefinition).Single(type =>
             reader.GetString(type.Namespace) + "." + reader.GetString(type.Name) == typeName);
         var descriptors = new Dictionary<string, byte[]>(StringComparer.Ordinal);
-        foreach (var handle in type.GetFields())
+        foreach (var field in type.GetFields().Select(handle => reader.GetFieldDefinition(handle))
+            .Where(field => !field.GetMarshallingDescriptor().IsNil))
         {
-            var field = reader.GetFieldDefinition(handle);
-            if (field.GetMarshallingDescriptor() is { IsNil: false } descriptor)
-            {
-                descriptors.Add("field " + reader.GetString(field.Name), reader.GetBlobBytes(descriptor));
-            }
+            descriptors.Add("field " + reader.GetString(field.Name), reader.GetBlobBytes(field.GetMarshallingDescriptor()));
         }
 
-        foreach (var handle in type.GetMethods())
+        foreach (var method in type.GetMethods().Select(handle => reader.GetMethodDefinition(handle)))
         {
-            var method = reader.GetMethodDefinition(handle);
-            foreach (var parameterHandle in method.GetParameters())
+            foreach (var parameter in method.GetParameters().Select(parameterHandle => reader.GetParameter(parameterHandle))
+                .Where(parameter => !parameter.GetMarshallingDescriptor().IsNil))
             {
-                var parameter = reader.GetParameter(parameterHandle);
-                if (parameter.GetMarshallingDescriptor() is { IsNil: false } descriptor)
-                {
-                    descriptors.Add(reader.GetString(method.Name) + " parameter " + parameter.SequenceNumber,
-                        reader.GetBlobBytes(descriptor));
-                }
+                descriptors.Add(reader.GetString(method.Name) + " parameter " + parameter.SequenceNumber,
+                    reader.GetBlobBytes(parameter.GetMarshallingDescriptor()));
             }
         }
 

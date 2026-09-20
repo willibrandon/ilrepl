@@ -279,9 +279,8 @@ public sealed class ComparisonFixturePermissionTests
 
     private static void UnlockFixture(string root)
     {
-        foreach (var path in ComparisonFixturePermissionExamples.Paths)
+        foreach (var fullPath in ComparisonFixturePermissionExamples.Paths.Select(path => Path.Join(root, path)))
         {
-            var fullPath = Path.Join(root, path);
             if (!File.Exists(fullPath) && !Directory.Exists(fullPath))
             {
                 continue;

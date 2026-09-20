@@ -15,6 +15,8 @@ namespace IlRepl.Tests.Tui;
 [TestClass]
 public sealed class ExceptionRangeWhitespaceTests
 {
+    private static readonly string[] s_separators = [" ", "\t", " \t "];
+
     /// <summary>
     /// Supplies cancellation for terminal and host operations.
     /// </summary>
@@ -31,9 +33,8 @@ public sealed class ExceptionRangeWhitespaceTests
     [DataRow("fault")]
     public void Range_Whitespace_SubmitsAndExecutes(string kind)
     {
-        foreach (var separator in new[] { " ", "\t", " \t " })
+        foreach (var source in s_separators.Select(separator => ExceptionRangeExamples.Source(kind, separator)))
         {
-            var source = ExceptionRangeExamples.Source(kind, separator);
             var scan = BlockBalance.Scan(source);
             Assert.AreEqual(0, scan.Depth);
             Assert.IsFalse(scan.AwaitingBrace);

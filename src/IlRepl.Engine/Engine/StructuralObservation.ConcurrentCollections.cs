@@ -56,13 +56,10 @@ internal sealed partial class StructuralObservation
         }
 
         var entries = new List<(string Order, object Key, object? Value)>(count);
-        foreach (var entry in snapshot)
+        // A concurrent shrink leaves unused slots; ConcurrentDictionary never accepts a null key.
+        foreach (var entry in snapshot.Where(entry => entry.Key is not null))
         {
-            // A concurrent shrink leaves unused slots; ConcurrentDictionary never accepts a null key.
-            if (entry.Key is not null)
-            {
-                entries.Add(("", entry.Key, entry.Value));
-            }
+            entries.Add(("", entry.Key, entry.Value));
         }
 
         if (entries.Count > 1)

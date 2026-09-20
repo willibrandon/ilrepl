@@ -312,12 +312,9 @@ internal sealed partial class FlowGraph<T> where T : class
     /// </summary>
     public void ValidateStacks(IReadOnlyList<FlowState<T>?> before)
     {
-        foreach (var section in Sections.Values.Where(section => section.Kind == BlockKind.Try))
+        foreach (var section in Sections.Values.Where(section => section.Kind == BlockKind.Try && Depth(section.Start) > 0))
         {
-            if (before[section.Start]?.Values is { Length: > 0 } values)
-            {
-                ReportEmptyStack(section.Start, "FLOW016", "a try region must begin with an empty stack", values.Length);
-            }
+            ReportEmptyStack(section.Start, "FLOW016", "a try region must begin with an empty stack", Depth(section.Start));
         }
 
         int InstructionAt(int position)
@@ -330,6 +327,8 @@ internal sealed partial class FlowGraph<T> where T : class
             return position;
         }
 
+        int Depth(int position) => before[position]?.Values?.Length ?? 0;
+
         var forward = new HashSet<int>();
         var backward = new HashSet<int>();
         for (var index = 0; index < Nodes.Count; index++)
@@ -339,22 +338,18 @@ internal sealed partial class FlowGraph<T> where T : class
                 continue;
             }
 
-            foreach (var edge in Edges[index])
+            foreach (var target in Edges[index].Select(edge => InstructionAt(edge.Target)))
             {
-                var target = InstructionAt(edge.Target);
                 (index < target ? forward : backward).Add(target);
             }
         }
 
-        foreach (var target in backward)
+        foreach (var target in backward.Where(target => !forward.Contains(target)
+            && !Seeds.Keys.Any(seed => InstructionAt(seed) == target) && Depth(target) > 0))
         {
-            if (!forward.Contains(target) && !Seeds.Keys.Any(seed => InstructionAt(seed) == target)
-                && before[target]?.Values is { Length: > 0 } values)
-            {
-                ReportEmptyStack(target, "FLOW017",
-                    "a backward branch carrying values needs a predecessor at a lower instruction offset (ECMA-335 III.1.7.5)",
-                    values.Length);
-            }
+            ReportEmptyStack(target, "FLOW017",
+                "a backward branch carrying values needs a predecessor at a lower instruction offset (ECMA-335 III.1.7.5)",
+                Depth(target));
         }
     }
 

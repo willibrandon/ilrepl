@@ -13,9 +13,8 @@ internal sealed partial class ImportedMethodFamily
     private void ScanEditedMetadata(MethodEditBody body, Type owner)
     {
         var location = MemberResolver.Describe(body.Method);
-        foreach (var entry in body.State.Entries.Where(entry => entry.Custom is not null))
+        foreach (var attribute in (body.State.Entries.Where(entry => entry.Custom is not null)).Select(entry => entry.Custom!))
         {
-            var attribute = entry.Custom!;
             var origin = location + ": attribute " + TypeNameFormatter.Pretty(attribute.AttributeType);
             ConsiderType(attribute.AttributeType, owner);
             var copied = _types.ContainsKey(DefinitionOf(attribute.AttributeType));
@@ -52,9 +51,8 @@ internal sealed partial class ImportedMethodFamily
             }
         }
 
-        foreach (var mapping in body.State.Overrides)
+        foreach (var target in body.State.Overrides.Select(mapping => mapping.Target))
         {
-            var target = mapping.Target;
             var declaring = target.DeclaringType!;
             var owners = owner.GetInterfaces().ToList();
             for (var parent = owner.BaseType; parent is not null; parent = parent.BaseType)

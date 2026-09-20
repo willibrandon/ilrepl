@@ -40,9 +40,9 @@ internal static partial class ImportedMetadata
         var metadata = ModuleMetadata.TryOpen(owner.Module)
             ?? throw new ReplException($"override metadata for {owner.Name} is unavailable");
         var handle = MetadataTokens.TypeDefinitionHandle(owner.MetadataToken & 0x00ffffff);
-        foreach (var implementation in metadata.GetTypeDefinition(handle).GetMethodImplementations())
+        foreach (var row in metadata.GetTypeDefinition(handle).GetMethodImplementations()
+            .Select(implementation => metadata.GetMethodImplementation(implementation)))
         {
-            var row = metadata.GetMethodImplementation(implementation);
             var arguments = owner.GetGenericArguments();
             yield return (owner.Module.ResolveMethod(MetadataTokens.GetToken(row.MethodBody), arguments, null)!,
                 owner.Module.ResolveMethod(MetadataTokens.GetToken(row.MethodDeclaration), arguments, null)!);
