@@ -548,7 +548,7 @@ public sealed partial class HostProcessEngine : IReplEngine
         }
 
         var observed = _exit.Task.IsCompletedSuccessfully ? _exit.Task.Result.ExitCode : null;
-        var code = observed is { } value ? $" with code {value}" : " (exit status unavailable)";
+        var code = observed is { } value ? " with code " + ExitCodes.Describe(value) : " (exit status unavailable)";
         return code + (tail.Length == 0 ? "" : ":\n" + tail);
     }
 

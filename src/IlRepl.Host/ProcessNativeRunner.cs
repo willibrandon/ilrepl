@@ -169,7 +169,7 @@ public static class ProcessNativeRunner
             var exit = OwnedProcessGroup.WaitForExitAsync(process, CancellationToken.None);
             if (await Task.WhenAny(connecting, exit).ConfigureAwait(false) == exit)
             {
-                throw new IOException($"native runtime exited during diagnostics startup with code {process.ExitCode}");
+                throw new IOException("native runtime exited during diagnostics startup with code " + ExitCodes.Describe(process.ExitCode));
             }
 
             connector = await connecting.ConfigureAwait(false) ?? throw new IOException("CoreCLR diagnostics startup timed out");
@@ -244,7 +244,7 @@ public static class ProcessNativeRunner
                 if (exit.IsCompleted)
                 {
                     outcome = "crashed";
-                    detail = $"native runtime exited with code {process.ExitCode}";
+                    detail = "native runtime exited with code " + ExitCodes.Describe(process.ExitCode);
                     break;
                 }
 

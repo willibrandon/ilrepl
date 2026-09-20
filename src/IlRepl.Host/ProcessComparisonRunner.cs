@@ -190,7 +190,7 @@ public static class ProcessComparisonRunner
 
             if (!File.Exists(resultReadyPath) && (process.ExitCode != 0 || !File.Exists(resultPath)))
             {
-                return Failure("crashed", $"comparison host exited with code {process.ExitCode}", rawOut, rawError);
+                return Failure("crashed", "comparison host exited with code " + ExitCodes.Describe(process.ExitCode), rawOut, rawError);
             }
 
             var result = JsonSerializer.Deserialize(await File.ReadAllTextAsync(resultPath, cancellationToken).ConfigureAwait(false),
