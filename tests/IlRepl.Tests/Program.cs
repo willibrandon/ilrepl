@@ -5,6 +5,7 @@ using IlRepl.Tests.Responsiveness;
 using IlRepl.Tests.Tui;
 using Microsoft.Testing.Platform.Builder;
 using CodeCoverageHook = Microsoft.Testing.Extensions.CodeCoverage.TestingPlatformBuilderHook;
+using HangDumpHook = Microsoft.Testing.Extensions.HangDump.TestingPlatformBuilderHook;
 using MSBuildHook = Microsoft.Testing.Platform.MSBuild.TestingPlatformBuilderHook;
 using MSTestHook = Microsoft.VisualStudio.TestTools.UnitTesting.TestingPlatformBuilderHook;
 using TelemetryHook = Microsoft.Testing.Extensions.Telemetry.TestingPlatformBuilderHook;
@@ -115,6 +116,7 @@ internal static class Program
         MSTestHook.AddExtensions(builder, args);
         TrxReportHook.AddExtensions(builder, args);
         CodeCoverageHook.AddExtensions(builder, args);
+        HangDumpHook.AddExtensions(builder, args);
         using var application = await builder.BuildAsync();
         return await application.RunAsync();
     }

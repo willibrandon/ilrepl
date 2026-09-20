@@ -10,6 +10,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <NoWarn>$(NoWarn);MSTESTEXP</NoWarn>
     <IlReplHostPublishReadyToRun>true</IlReplHostPublishReadyToRun>
+    <EnableMicrosoftTestingExtensionsHangDump>true</EnableMicrosoftTestingExtensionsHangDump>
   </PropertyGroup>
 
   <ItemGroup>
