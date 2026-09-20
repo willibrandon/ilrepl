@@ -45,7 +45,7 @@ public static class ProcessNativeRunner
             return cached;
         }
 
-        var root = Path.Combine(Path.GetTempPath(), "ilrepl-native-" + Guid.NewGuid().ToString("N"));
+        var root = Path.Join(Path.GetTempPath(), "ilrepl-native-" + Guid.NewGuid().ToString("N"));
         var left = await RunSideAsync(package, true, root, register, cancellationToken).ConfigureAwait(false);
         if (package.Right is null)
         {
@@ -115,7 +115,7 @@ public static class ProcessNativeRunner
         Task<string>? stdout = null;
         Task<string>? stderr = null;
         var started = false;
-        var listingPath = Path.Combine(root, "native.txt");
+        var listingPath = Path.Join(root, "native.txt");
         var overflow = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var outcome = "complete";
         string? detail = null;
@@ -124,16 +124,16 @@ public static class ProcessNativeRunner
             cancellationToken.ThrowIfCancellationRequested();
             ComparisonDirectory.Delete(root);
             ComparisonDirectory.Create(root);
-            Directory.CreateDirectory(Path.Combine(root, "work"));
-            var packagePath = Path.Combine(root, "package.json");
+            Directory.CreateDirectory(Path.Join(root, "work"));
+            var packagePath = Path.Join(root, "package.json");
             await File.WriteAllTextAsync(packagePath, JsonSerializer.Serialize(package, ProtocolJsonContext.Default.NativePackage),
                 cancellationToken).ConfigureAwait(false);
             var environment = NativeRuntimeSettings.Create(package, target, listingPath, port.Address);
-            var bundled = Path.Combine(AppContext.BaseDirectory, "host", "ilrepl-host.dll");
+            var bundled = Path.Join(AppContext.BaseDirectory, "host", "ilrepl-host.dll");
             var host = File.Exists(bundled) ? bundled : typeof(ProcessNativeRunner).Assembly.Location;
             process.StartInfo = new ProcessStartInfo
             {
-                FileName = RuntimeHost(), WorkingDirectory = Path.Combine(root, "work"),
+                FileName = RuntimeHost(), WorkingDirectory = Path.Join(root, "work"),
                 UseShellExecute = false, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true,
                 StandardOutputEncoding = Encoding.UTF8, StandardErrorEncoding = Encoding.UTF8, CreateNoWindow = true,
             };
@@ -194,7 +194,7 @@ public static class ProcessNativeRunner
             while (true)
             {
                 lifetime.Token.ThrowIfCancellationRequested();
-                if (!attached && File.Exists(Path.Combine(root, "group-ready")))
+                if (!attached && File.Exists(Path.Join(root, "group-ready")))
                 {
                     group.Attach(process);
                 if (register is not null)
@@ -204,21 +204,21 @@ public static class ProcessNativeRunner
                     }
 
                     attached = true;
-                    await File.WriteAllTextAsync(Path.Combine(root, "start"), "start", lifetime.Token).ConfigureAwait(false);
+                    await File.WriteAllTextAsync(Path.Join(root, "start"), "start", lifetime.Token).ConfigureAwait(false);
                 }
 
-                if (!ready && File.Exists(Path.Combine(root, "ready")))
+                if (!ready && File.Exists(Path.Join(root, "ready")))
                 {
                     ready = true;
                     lifetime.CancelAfter(package.Options.TimeoutMilliseconds);
                 }
 
-                var statePath = Path.Combine(root, "state.json");
+                var statePath = Path.Join(root, "state.json");
                 state = await NativeStateFile.ReadAsync(statePath, lifetime.Token).ConfigureAwait(false) ?? state;
                 var observed = state.MethodId != 0 && collector.Observed(state.MethodId, state.Method, package.Options.Tier);
                 if (observed && package.Options.Tier == "tier1")
                 {
-                    await File.WriteAllTextAsync(Path.Combine(root, "stop"), "stop", lifetime.Token).ConfigureAwait(false);
+                    await File.WriteAllTextAsync(Path.Join(root, "stop"), "stop", lifetime.Token).ConfigureAwait(false);
                 }
 
                 if (overflow.Task.IsCompleted)
@@ -235,7 +235,7 @@ public static class ProcessNativeRunner
                     break;
                 }
 
-                if (File.Exists(Path.Combine(root, "work-done"))
+                if (File.Exists(Path.Join(root, "work-done"))
                     && (package.Options.Tier != "tier1" || observed || state.Report.Outcome != "complete"))
                 {
                     break;
@@ -275,7 +275,7 @@ public static class ProcessNativeRunner
                 var draining = false;
                 try
                 {
-                    var finished = outcome == "complete" && File.Exists(Path.Combine(root, "work-done"));
+                    var finished = outcome == "complete" && File.Exists(Path.Join(root, "work-done"));
                     using var drain = new CancellationTokenSource(TimeSpan.FromSeconds(finished ? 30 : 5));
                     await session.StopAsync(drain.Token).ConfigureAwait(false);
                     draining = true;
@@ -294,10 +294,10 @@ public static class ProcessNativeRunner
             }
 
             await lifetime.CancelAsync().ConfigureAwait(false);
-            if (started && !process.HasExited && File.Exists(Path.Combine(root, "work-done")))
+            if (started && !process.HasExited && File.Exists(Path.Join(root, "work-done")))
             {
                 // Orderly shutdown also flushes release runtimes that leave the final native listing buffered.
-                await File.WriteAllTextAsync(Path.Combine(root, "release"), "release", CancellationToken.None).ConfigureAwait(false);
+                await File.WriteAllTextAsync(Path.Join(root, "release"), "release", CancellationToken.None).ConfigureAwait(false);
                 try
                 {
                     await OwnedProcessGroup.WaitForExitAsync(process, CancellationToken.None)
@@ -343,7 +343,7 @@ public static class ProcessNativeRunner
             }
         }
 
-        var finalStatePath = Path.Combine(root, "state.json");
+        var finalStatePath = Path.Join(root, "state.json");
         state = await NativeStateFile.ReadAsync(finalStatePath, CancellationToken.None).ConfigureAwait(false) ?? state;
         var report = state.Report with
         {
@@ -444,7 +444,7 @@ public static class ProcessNativeRunner
     {
         var runtime = Path.GetDirectoryName(typeof(object).Assembly.Location)!;
         var root = Directory.GetParent(runtime)?.Parent?.Parent?.FullName;
-        var host = root is null ? "" : Path.Combine(root, OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet");
+        var host = root is null ? "" : Path.Join(root, OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet");
         if (!File.Exists(host))
         {
             throw new ReplException("cannot locate the dotnet host for this exact CoreCLR installation");

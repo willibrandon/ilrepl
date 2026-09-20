@@ -158,8 +158,8 @@ public sealed partial class SymbolIdentityTests
         var second = new AssemblyLoadContext("identity-second", isCollectible: true);
         try
         {
-            var a = first.LoadFromStream(new MemoryStream(image)).GetTypes().Single(t => t.Name == "Fixture");
-            var b = second.LoadFromStream(new MemoryStream(image)).GetTypes().Single(t => t.Name == "Fixture");
+            var a = first.LoadImage(image).GetTypes().Single(t => t.Name == "Fixture");
+            var b = second.LoadImage(image).GetTypes().Single(t => t.Name == "Fixture");
             var symbolA = RuntimeSymbolImporter.Import(a);
             var symbolB = RuntimeSymbolImporter.Import(b);
             Assert.AreEqual(a.MetadataToken, b.MetadataToken);

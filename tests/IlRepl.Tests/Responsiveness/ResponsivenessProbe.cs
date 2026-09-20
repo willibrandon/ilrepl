@@ -43,19 +43,19 @@ internal static class ResponsivenessProbe
         string[] scenarios = requested is null
             ? ["empty", "catalog", "session", "draft-200", "draft-2000", "generic-4", "generic-16", "generic-64", "combined"]
             : [requested];
-        output = Path.Combine(output, DateTime.UtcNow.ToString("yyyyMMddTHHmmssfff", CultureInfo.InvariantCulture));
+        output = Path.Join(output, DateTime.UtcNow.ToString("yyyyMMddTHHmmssfff", CultureInfo.InvariantCulture));
         Directory.CreateDirectory(output);
         Console.WriteLine("Responsiveness artifacts: " + output);
         using var timeout = new CancellationTokenSource(TimeSpan.FromHours(2));
         var token = timeout.Token;
         var frontendHash = SessionCodec.Hash(await File.ReadAllBytesAsync(frontend, token));
-        var cache = Path.Combine(RepoPaths.Root, "artifacts", "responsiveness", "fixtures");
+        var cache = Path.Join(RepoPaths.Root, "artifacts", "responsiveness", "fixtures");
         var assembly = ResponsivenessFixtures.Assembly(cache, quick ? 100 : 10_000, 10);
         var sessionBytes = scenarios.Any(scenario => scenario is "session" or "combined")
             ? await RetainedSessionAsync(frontend, cache, quick ? 50 : 10_000, quick ? 10 : 1_000, token)
             : SessionCodec.Write(new SessionDocument());
         var sessionHash = SessionCodec.Hash(sessionBytes);
-        var session = Path.Combine(cache, sessionHash + ".ilrepl.json");
+        var session = Path.Join(cache, sessionHash + ".ilrepl.json");
         await File.WriteAllBytesAsync(session, sessionBytes, token);
         var fixture = ResponsivenessFixtures.Version + ":" + SessionCodec.Hash(await File.ReadAllBytesAsync(assembly, token))
             + ":" + sessionHash;
@@ -92,7 +92,7 @@ internal static class ResponsivenessProbe
                 values.Add(sample);
             }
 
-            var artifacts = Path.Combine(output, scenario, "processes");
+            var artifacts = Path.Join(output, scenario, "processes");
             Directory.CreateDirectory(artifacts);
             var retained = scenario is "session" or "combined" ? session : null;
             var catalog = scenario is "catalog" or "combined";
@@ -296,7 +296,7 @@ internal static class ResponsivenessProbe
                 FailureStage = failureStage,
             };
 
-            await File.WriteAllTextAsync(Path.Combine(output, scenario + ".json"),
+            await File.WriteAllTextAsync(Path.Join(output, scenario + ".json"),
                 JsonSerializer.Serialize(record, ResponsivenessJsonContext.Default.ResponsivenessRecord),
                 failure is null ? token : CancellationToken.None);
             if (failure is not null)
@@ -320,7 +320,7 @@ internal static class ResponsivenessProbe
 
     private static IEnumerable<string> CheckBudgets(ResponsivenessRecord record)
     {
-        using var budgets = JsonDocument.Parse(File.ReadAllText(Path.Combine(RepoPaths.Root, "tests", "responsiveness-baselines.json")));
+        using var budgets = JsonDocument.Parse(File.ReadAllText(Path.Join(RepoPaths.Root, "tests", "responsiveness-baselines.json")));
         foreach (var target in budgets.RootElement.GetProperty("targetsMilliseconds").EnumerateObject())
         {
             if (!record.Metrics.TryGetValue(target.Name, out var measured))
@@ -347,16 +347,16 @@ internal static class ResponsivenessProbe
         int definitions,
         CancellationToken cancellationToken)
     {
-        var distribution = Path.Combine(Path.GetDirectoryName(frontend)!, "host");
-        var host = Path.Combine(distribution, "ilrepl-host.dll");
+        var distribution = Path.Join(Path.GetDirectoryName(frontend)!, "host");
+        var host = Path.Join(distribution, "ilrepl-host.dll");
         var hashes = new List<string>();
         foreach (var assembly in new[] { "ilrepl-host.dll", "IlRepl.Engine.dll", "IlRepl.Protocol.dll" })
         {
-            hashes.Add(SessionCodec.Hash(await File.ReadAllBytesAsync(Path.Combine(distribution, assembly), cancellationToken)));
+            hashes.Add(SessionCodec.Hash(await File.ReadAllBytesAsync(Path.Join(distribution, assembly), cancellationToken)));
         }
 
         var package = SessionCodec.Hash(Encoding.UTF8.GetBytes(string.Join(':', hashes)));
-        var path = Path.Combine(cache, ResponsivenessFixtures.Version, $"session-{submissions}-{definitions}-{package}.ilrepl.json");
+        var path = Path.Join(cache, ResponsivenessFixtures.Version, $"session-{submissions}-{definitions}-{package}.ilrepl.json");
         if (File.Exists(path))
         {
             return await File.ReadAllBytesAsync(path, cancellationToken);

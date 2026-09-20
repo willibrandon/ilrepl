@@ -102,12 +102,9 @@ internal sealed partial class FlowGraph<T> where T : class
         for (var i = 0; i < nodes.Count; i++)
         {
             var node = nodes[i];
-            foreach (var label in node.Labels)
+            foreach (var label in node.Labels.Where(label => !labels.TryAdd(label, i)))
             {
-                if (!labels.TryAdd(label, i))
-                {
-                    Report(i, "FLOW001", AnalysisDiagnosticKind.Error, $"label '{label}' is already defined");
-                }
+                Report(i, "FLOW001", AnalysisDiagnosticKind.Error, $"label '{label}' is already defined");
             }
 
             if (node.Block == BlockKind.Try)
@@ -220,12 +217,10 @@ internal sealed partial class FlowGraph<T> where T : class
     public void ValidateRegions()
     {
         ValidatePrefixes();
-        foreach (var section in Sections.Values.Where(section => section.Kind == BlockKind.Try))
+        foreach (var section in Sections.Values.Where(section => section.Kind == BlockKind.Try)
+            .Where(section => Regions[section.Start].Any(id => id != section.Start && Sections[id].Kind == BlockKind.Filter)))
         {
-            if (Regions[section.Start].Any(id => id != section.Start && Sections[id].Kind == BlockKind.Filter))
-            {
-                Report(section.Start, "FLOW024", AnalysisDiagnosticKind.Error, "a try region is not allowed inside a filter");
-            }
+            Report(section.Start, "FLOW024", AnalysisDiagnosticKind.Error, "a try region is not allowed inside a filter");
         }
 
         for (var index = 0; index < Nodes.Count; index++)
@@ -511,15 +506,13 @@ internal sealed partial class FlowGraph<T> where T : class
 
         foreach (var group in EnclosingTryGroups(instruction).Where(group => group != filter.Group))
         {
-            foreach (var candidate in Clauses.Where(candidate => candidate.Group == group && IsSearchClause(candidate)))
+            foreach (var candidate in Clauses.Where(candidate => candidate.Group == group && IsSearchClause(candidate))
+                .Where(candidate => targets.Add(candidate.Entry)))
             {
-                if (targets.Add(candidate.Entry))
+                yield return candidate.Entry;
+                if (candidate.Kind == BlockKind.Filter || IsCatchAll(candidate))
                 {
-                    yield return candidate.Entry;
-                    if (candidate.Kind == BlockKind.Filter || IsCatchAll(candidate))
-                    {
-                        yield break;
-                    }
+                    yield break;
                 }
             }
         }

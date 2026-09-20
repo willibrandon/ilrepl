@@ -79,7 +79,7 @@ public sealed class MethodEditDependencyDiscoveryTests
             var context = new AssemblyLoadContext("late-owner-" + Guid.NewGuid(), isCollectible: true);
             try
             {
-                var exported = context.LoadFromStream(new MemoryStream(image));
+                var exported = context.LoadImage(image);
                 var owner = exported.GetType(edit.Method.DeclaringType!.FullName!, throwOnError: true)!;
                 Assert.AreEqual(42, owner.GetMethod("Read")!.Invoke(null, null));
                 AssertCopiedHelpers(exported);

@@ -30,9 +30,9 @@ public sealed class SessionSnapshotStoreTests
         var directory = Directory.CreateTempSubdirectory("ilrepl-offline-save-").FullName;
         try
         {
-            var external = Directory.CreateDirectory(Path.Combine(directory, "private-machine-location")).FullName;
-            var project = Path.Combine(external, "Dependency.csproj");
-            var assembly = Path.Combine(external, "Dependency.dll");
+            var external = Directory.CreateDirectory(Path.Join(directory, "private-machine-location")).FullName;
+            var project = Path.Join(external, "Dependency.csproj");
+            var assembly = Path.Join(external, "Dependency.dll");
             await File.WriteAllTextAsync(project, "<Project />", TestContext.CancellationToken);
             var image = AssemblyExporter.Write(IlLines.Load(".class public OfflineDependency { }"), "OfflineDependency");
             await File.WriteAllBytesAsync(assembly, image, TestContext.CancellationToken);
@@ -48,7 +48,7 @@ public sealed class SessionSnapshotStoreTests
                 Editor = new SessionEditor { Lines = ["ldc.i4.s 42"], Caret = 11, Anchor = 11 },
             };
 
-            var path = Path.Combine(directory, "shared", "example.ilrepl.json");
+            var path = Path.Join(directory, "shared", "example.ilrepl.json");
             SessionDocument captured;
             byte[] ready;
             await using (var host = await HostProcessEngine.StartAsync(cancellationToken: TestContext.CancellationToken))
@@ -71,7 +71,7 @@ public sealed class SessionSnapshotStoreTests
                 ready = await File.ReadAllBytesAsync(path, TestContext.CancellationToken);
             }
 
-            var cache = Path.Combine(directory, "offline-cache");
+            var cache = Path.Join(directory, "offline-cache");
             Assert.AreEqual(path, await SessionSnapshotStore.WriteAsync(path, captured, embed, cache, TestContext.CancellationToken));
             var offline = await File.ReadAllBytesAsync(path, TestContext.CancellationToken);
             Assert.AreSequenceEqual(ready, offline);
@@ -103,10 +103,10 @@ public sealed class SessionSnapshotStoreTests
         var directory = Directory.CreateTempSubdirectory("ilrepl-offline-cancel-").FullName;
         try
         {
-            var path = Path.Combine(directory, "example.ilrepl.json");
+            var path = Path.Join(directory, "example.ilrepl.json");
             var original = SessionCodec.Write(new SessionDocument());
             await File.WriteAllBytesAsync(path, original, TestContext.CancellationToken);
-            var cache = Path.Combine(directory, "cache");
+            var cache = Path.Join(directory, "cache");
             var invalid = new SessionDocument { Assets = [new SessionAsset { Hash = new string('0', 64), Image = [1, 2, 3] }] };
             await Assert.ThrowsExactlyAsync<InvalidDataException>(() =>
                 SessionSnapshotStore.WriteAsync(path, invalid, true, cache, TestContext.CancellationToken));

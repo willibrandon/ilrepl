@@ -27,17 +27,17 @@ public sealed class SessionProjectVariantsTests
     public async Task Load_LanguageProjectsUseActualSdkCompilers(string language)
     {
         using var fixture = new SessionDependencyFixture();
-        var directory = Path.Combine(fixture.DirectoryPath, "language project");
+        var directory = Path.Join(fixture.DirectoryPath, "language project");
         Directory.CreateDirectory(directory);
         var fsharp = language == "FSharp";
-        var project = Path.Combine(directory, fixture.AssemblyName + (fsharp ? ".fsproj" : ".vbproj"));
+        var project = Path.Join(directory, fixture.AssemblyName + (fsharp ? ".fsproj" : ".vbproj"));
         var properties = Properties();
         properties.Add(new XElement("RootNamespace", ""));
         var document = new XDocument(new XElement("Project", new XAttribute("Sdk", "Microsoft.NET.Sdk"), properties));
         if (fsharp)
         {
             document.Root!.Add(new XElement("ItemGroup", new XElement("Compile", new XAttribute("Include", "Values.fs"))));
-            File.WriteAllText(Path.Combine(directory, "Values.fs"), """
+            File.WriteAllText(Path.Join(directory, "Values.fs"), """
                 namespace DependencySamples
                 type Values =
                     static member Read() = List.sum [20; 22]
@@ -45,7 +45,7 @@ public sealed class SessionProjectVariantsTests
         }
         else
         {
-            File.WriteAllText(Path.Combine(directory, "Values.vb"), """
+            File.WriteAllText(Path.Join(directory, "Values.vb"), """
                 Namespace DependencySamples
                     Public Class Values
                         Public Shared Function Read() As Integer
@@ -60,11 +60,11 @@ public sealed class SessionProjectVariantsTests
         if (fsharp)
         {
             var sdk = (await RunSdkAsync(directory, ["msbuild", project, "-nologo", "-getProperty:MSBuildToolsPath"])).Trim();
-            var packages = Directory.GetFiles(Path.Combine(sdk, "FSharp", "library-packs"), "FSharp.Core.*.nupkg");
+            var packages = Directory.GetFiles(Path.Join(sdk, "FSharp", "library-packs"), "FSharp.Core.*.nupkg");
             Assert.IsNotEmpty(packages, "The installed SDK must supply its compiler's matching FSharp.Core package.");
             foreach (var package in packages)
             {
-                File.Copy(package, Path.Combine(fixture.FeedPath, Path.GetFileName(package)));
+                File.Copy(package, Path.Join(fixture.FeedPath, Path.GetFileName(package)));
             }
         }
 
@@ -78,7 +78,7 @@ public sealed class SessionProjectVariantsTests
         if (fsharp)
         {
             Assert.Contains(asset => asset.Name.StartsWith("FSharp.Core,", StringComparison.Ordinal), reference.Assets);
-            Assert.IsTrue(Directory.Exists(Path.Combine(fixture.PackageCachePath, "fsharp.core")));
+            Assert.IsTrue(Directory.Exists(Path.Join(fixture.PackageCachePath, "fsharp.core")));
         }
 
         await AssertValueAsync(controller, fixture.AssemblyName, 42);
@@ -116,8 +116,8 @@ public sealed class SessionProjectVariantsTests
         var root = reference.Assets.Single(asset => asset.Name.StartsWith(fixture.AssemblyName + ",", StringComparison.Ordinal));
         var helper = reference.Assets.Single(asset => asset.Name.StartsWith(dependencyName + ",", StringComparison.Ordinal));
 
-        Assert.AreEqual(Path.Combine(Path.GetDirectoryName(project)!, "custom output", fixture.AssemblyName + ".dll"), root.Path);
-        Assert.AreEqual(Path.Combine(Path.GetDirectoryName(dependency)!, "custom output", dependencyName + ".dll"), helper.Path);
+        Assert.AreEqual(Path.Join(Path.GetDirectoryName(project)!, "custom output", fixture.AssemblyName + ".dll"), root.Path);
+        Assert.AreEqual(Path.Join(Path.GetDirectoryName(dependency)!, "custom output", dependencyName + ".dll"), helper.Path);
         Assert.IsTrue(File.Exists(root.Path));
         Assert.IsTrue(File.Exists(helper.Path));
         await AssertValueAsync(controller, fixture.AssemblyName, 42);
@@ -184,7 +184,7 @@ public sealed class SessionProjectVariantsTests
         using var fixture = new SessionDependencyFixture();
         var project = WriteCSharpProject(fixture, "sdk selection", fixture.AssemblyName,
             "namespace DependencySamples; public static class Values { public static int Read() => 1; }");
-        var global = Path.Combine(Path.GetDirectoryName(project)!, "global.json");
+        var global = Path.Join(Path.GetDirectoryName(project)!, "global.json");
         File.WriteAllText(global, """{"sdk":{"version":"99.0.100","rollForward":"disable"}}""");
         await using var controller = await fixture.StartAsync(TestContext.CancellationToken);
         await SubmitAsync(controller, "ldc.i4 42");
@@ -196,7 +196,7 @@ public sealed class SessionProjectVariantsTests
         Assert.Contains("99.0.100", diagnostic);
         Assert.Contains("global.json", diagnostic);
         Assert.IsEmpty((await CaptureAsync(controller)).References);
-        Assert.IsFalse(Directory.Exists(Path.Combine(Path.GetDirectoryName(project)!, "bin")));
+        Assert.IsFalse(Directory.Exists(Path.Join(Path.GetDirectoryName(project)!, "bin")));
         AssertResult(await SubmitAsync(controller, "ret"), 42);
     }
 
@@ -210,8 +210,8 @@ public sealed class SessionProjectVariantsTests
         using var fixture = new SessionDependencyFixture();
         var project = WriteCSharpProject(fixture, "cancel build", fixture.AssemblyName,
             "namespace DependencySamples; public static class Values { public static int Read() => 1; }");
-        var marker = Path.Combine(fixture.DirectoryPath, "build.pid");
-        var release = Path.Combine(fixture.DirectoryPath, "release.build");
+        var marker = Path.Join(fixture.DirectoryPath, "build.pid");
+        var release = Path.Join(fixture.DirectoryPath, "release.build");
         AddBuildGate(project, marker, release);
         var started = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
         using var watcher = new FileSystemWatcher(fixture.DirectoryPath, "build.pid")
@@ -317,11 +317,11 @@ public sealed class SessionProjectVariantsTests
 
     private static string WriteCSharpProject(SessionDependencyFixture fixture, string folder, string name, string source)
     {
-        var directory = Path.Combine(fixture.DirectoryPath, folder);
+        var directory = Path.Join(fixture.DirectoryPath, folder);
         Directory.CreateDirectory(directory);
-        var path = Path.Combine(directory, name + ".csproj");
+        var path = Path.Join(directory, name + ".csproj");
         new XDocument(new XElement("Project", new XAttribute("Sdk", "Microsoft.NET.Sdk"), Properties())).Save(path);
-        File.WriteAllText(Path.Combine(directory, "Values.cs"), source);
+        File.WriteAllText(Path.Join(directory, "Values.cs"), source);
         return path;
     }
 

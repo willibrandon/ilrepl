@@ -107,10 +107,10 @@ public sealed class SessionEditSnapshotTests
     {
         var token = TestContext.CancellationToken;
         using var fixture = new SessionDependencyFixture();
-        var path = Path.Combine(fixture.DirectoryPath, fixture.AssemblyName + ".dll");
+        var path = Path.Join(fixture.DirectoryPath, fixture.AssemblyName + ".dll");
         var dependencyName = fixture.AssemblyName + "Dependency";
-        var dependencyPath = Path.Combine(fixture.DirectoryPath, dependencyName + ".dll");
-        var savedPath = Path.Combine(fixture.DirectoryPath, "comparison.ilrepl.json");
+        var dependencyPath = Path.Join(fixture.DirectoryPath, dependencyName + ".dll");
+        var savedPath = Path.Join(fixture.DirectoryPath, "comparison.ilrepl.json");
         File.WriteAllBytes(path, CreateImage(fixture.AssemblyName, 21, externalHelper ? dependencyName : null));
         if (externalHelper)
         {
@@ -172,9 +172,9 @@ public sealed class SessionEditSnapshotTests
         IsolatedTestProcess.WithDirectoryAsync(TestContext, async directory =>
         {
             var name = "FrozenEdit" + Guid.NewGuid().ToString("N");
-            var path = Path.Combine(directory, name + ".dll");
+            var path = Path.Join(directory, name + ".dll");
             var helperName = name + "Dependency";
-            var helperPath = Path.Combine(directory, helperName + ".dll");
+            var helperPath = Path.Join(directory, helperName + ".dll");
             File.WriteAllBytes(path, CreateImage(name, 21, externalHelper ? helperName : null));
             using var initial = new ReplCore();
             if (externalHelper)

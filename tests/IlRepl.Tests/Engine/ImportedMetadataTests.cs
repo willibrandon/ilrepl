@@ -201,7 +201,8 @@ public sealed class ImportedMetadataTests
         Assert.AreSequenceEqual(expected, (int[])edit.Method!.Invoke(null, null)!);
         foreach (var exported in Images(session, "retained-rva"))
         {
-            using var module = CecilModule.ReadModule(new MemoryStream(exported));
+            using var moduleStream = new MemoryStream(exported);
+            using var module = CecilModule.ReadModule(moduleStream);
             var owner = module.Types.Single(type => type.FullName == edit.Method.DeclaringType!.FullName);
             var data = owner.Fields.Single(field => field.Name == "Data");
             Assert.IsTrue(data.IsInitOnly);
@@ -366,7 +367,7 @@ public sealed class ImportedMetadataTests
         var context = new AssemblyLoadContext("imported-metadata-" + Guid.NewGuid(), isCollectible: true);
         try
         {
-            var assembly = context.LoadFromStream(new MemoryStream(image));
+            var assembly = context.LoadImage(image);
             inspect(assembly.GetType(typeName, throwOnError: true)!);
         }
         finally

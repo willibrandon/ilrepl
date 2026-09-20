@@ -40,12 +40,12 @@ public sealed class WindowsConsoleTests
     {
         var token = TestContext.CancellationToken;
         using var files = new SessionWorkspaceFixture();
-        var frontendRecord = Path.Combine(files.DirectoryPath, "frontend.pid");
-        var hostRecord = Path.Combine(files.DirectoryPath, "host.pid");
-        var closeMarker = Path.Combine(files.DirectoryPath, "console.closed");
-        var descendants = Path.Combine(files.DirectoryPath, "processes");
-        var descendantsReady = Path.Combine(files.DirectoryPath, "descendants.ready");
-        var script = Path.Combine(files.DirectoryPath, "descendants.il");
+        var frontendRecord = Path.Join(files.DirectoryPath, "frontend.pid");
+        var hostRecord = Path.Join(files.DirectoryPath, "host.pid");
+        var closeMarker = Path.Join(files.DirectoryPath, "console.closed");
+        var descendants = Path.Join(files.DirectoryPath, "processes");
+        var descendantsReady = Path.Join(files.DirectoryPath, "descendants.ready");
+        var script = Path.Join(files.DirectoryPath, "descendants.il");
         string[] source =
         [
             ".load " + LiteralParser.Escape(typeof(ComparisonDescendantSource).Assembly.Location),
@@ -95,7 +95,7 @@ public sealed class WindowsConsoleTests
             if (close)
             {
                 // This independent client survives the PTY root's final TerminateProcess fallback long enough to witness close.
-                var ready = Path.Combine(files.DirectoryPath, "observer.ready");
+                var ready = Path.Join(files.DirectoryPath, "observer.ready");
                 var observe = new ProcessStartInfo(HostLocator.FindDotnet()) { UseShellExecute = false };
                 foreach (var argument in new[]
                 {

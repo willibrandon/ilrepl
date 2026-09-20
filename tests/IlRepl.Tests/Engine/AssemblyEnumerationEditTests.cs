@@ -59,7 +59,7 @@ public sealed class AssemblyEnumerationEditTests
             var context = new AssemblyLoadContext("enumeration-replacement", isCollectible: true);
             try
             {
-                var assembly = context.LoadFromStream(new MemoryStream(image));
+                var assembly = context.LoadImage(image);
                 Assert.AreEqual(42, assembly.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
             }
             finally

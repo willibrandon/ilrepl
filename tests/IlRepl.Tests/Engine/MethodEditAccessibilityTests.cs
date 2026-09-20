@@ -97,7 +97,7 @@ public sealed class MethodEditAccessibilityTests
             var context = new AssemblyLoadContext("nested-generic-edit-" + Guid.NewGuid(), isCollectible: true);
             try
             {
-                var assembly = context.LoadFromStream(new MemoryStream(image));
+                var assembly = context.LoadImage(image);
                 var owner = assembly.GetType(selected.DeclaringType.GetGenericTypeDefinition().FullName!)!;
                 Assert.IsTrue(owner.IsNestedPrivate);
                 Assert.ThrowsExactly<ArgumentException>(() => owner.MakeGenericType(typeof(int), typeof(int)));
@@ -186,7 +186,7 @@ public sealed class MethodEditAccessibilityTests
             var context = new AssemblyLoadContext("edit-accessibility-" + Guid.NewGuid(), isCollectible: true);
             try
             {
-                var assembly = context.LoadFromStream(new MemoryStream(image));
+                var assembly = context.LoadImage(image);
                 var owner = assembly.GetType(edit.Method!.DeclaringType!.FullName!)!;
                 var selected = owner.GetMethod("Read", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)!;
                 Assert.AreEqual(nestedPrivate, owner.IsNestedPrivate);

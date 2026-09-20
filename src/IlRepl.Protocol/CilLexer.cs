@@ -115,12 +115,9 @@ public static class CilLexer
         }
 
         var result = new StringBuilder(line.Length);
-        foreach (var segment in segments)
+        foreach (var segment in segments.Where(segment => segment.Kind is not (CilSegmentKind.LineComment or CilSegmentKind.BlockComment)))
         {
-            if (segment.Kind is not (CilSegmentKind.LineComment or CilSegmentKind.BlockComment))
-            {
-                result.Append(line, segment.Start, segment.Length);
-            }
+            result.Append(line, segment.Start, segment.Length);
         }
 
         return result.ToString();

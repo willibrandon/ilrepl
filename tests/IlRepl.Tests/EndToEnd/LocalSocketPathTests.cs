@@ -29,7 +29,7 @@ public sealed class LocalSocketPathTests
     {
         var suffix = kind switch { "ascii" => new string('a', 80), "utf8" => new string('界', 28), _ => "界" };
         var root = OperatingSystem.IsWindows() ? Path.GetTempPath() : "/tmp";
-        var temporary = Path.Combine(root, "ilr-" + Guid.NewGuid().ToString("N")[..8] + "-" + suffix);
+        var temporary = Path.Join(root, "ilr-" + Guid.NewGuid().ToString("N")[..8] + "-" + suffix);
         Directory.CreateDirectory(temporary);
         try
         {
@@ -40,7 +40,7 @@ public sealed class LocalSocketPathTests
                     Assert.IsLessThanOrEqualTo(55, temporary.Length);
                 }
 
-                Assert.IsGreaterThan(108, Encoding.UTF8.GetByteCount(Path.Combine(temporary, "ilr-0123456789abcdef", "host.sock")));
+                Assert.IsGreaterThan(108, Encoding.UTF8.GetByteCount(Path.Join(temporary, "ilr-0123456789abcdef", "host.sock")));
             }
 
             var start = new ProcessStartInfo(HostLocator.FindDotnet()) { WorkingDirectory = RepoPaths.Root };

@@ -41,10 +41,10 @@ internal static class ComparisonSatelliteFiles
                 continue;
             }
 
-            var path = Path.Combine(root, culture, fileName);
+            var path = Path.Join(root, culture, fileName);
             if (!File.Exists(path))
             {
-                path = Path.Combine(root, culture.ToLowerInvariant(), fileName);
+                path = Path.Join(root, culture.ToLowerInvariant(), fileName);
             }
 
             if (File.Exists(path))

@@ -100,8 +100,9 @@ public sealed class SessionPackageTests
         using var fixture = new SessionDependencyFixture();
         var removed = fixture.AssemblyName + "Removed";
         fixture.WritePackage(removed, "1.0.0", 21);
-        using (var unique = AssemblyDefinition.ReadAssembly(new MemoryStream(fixture.PackageImage(removed, "1.0.0"))))
+        using (var package = new MemoryStream(fixture.PackageImage(removed, "1.0.0")))
         {
+            using var unique = AssemblyDefinition.ReadAssembly(package);
             unique.MainModule.GetType("DependencySamples.Values").Name = "RemovedValues";
             using var bytes = new MemoryStream();
             unique.Write(bytes);
@@ -123,7 +124,7 @@ public sealed class SessionPackageTests
         Assert.IsFalse(missing.Succeeded);
         Assert.Contains("not found", string.Join('\n', missing.Lines.Select(line => line.PlainText)));
         await AssertValueAsync(controller, fixture.AssemblyName, 84);
-        var path = Path.Combine(fixture.DirectoryPath, "upgraded.ilrepl.json");
+        var path = Path.Join(fixture.DirectoryPath, "upgraded.ilrepl.json");
         await SubmitAsync(controller, ".session save \"" + path + "\" --embed");
         await SubmitAsync(controller, ".session open \"" + path + "\"");
         await AssertValueAsync(controller, fixture.AssemblyName, 84);
@@ -177,7 +178,7 @@ public sealed class SessionPackageTests
         Assert.IsFalse(failed.Succeeded);
         Assert.Contains("PackageSourceMapping", string.Join('\n', failed.Lines.Select(line => line.PlainText)));
         Assert.IsEmpty((await CaptureAsync(controller)).References);
-        Assert.IsFalse(Directory.Exists(Path.Combine(fixture.PackageCachePath, fixture.AssemblyName.ToLowerInvariant())));
+        Assert.IsFalse(Directory.Exists(Path.Join(fixture.PackageCachePath, fixture.AssemblyName.ToLowerInvariant())));
         AssertResult(await SubmitAsync(controller, "ret"), 21);
     }
 
@@ -190,7 +191,7 @@ public sealed class SessionPackageTests
     {
         using var fixture = new SessionDependencyFixture();
         fixture.WritePackage(fixture.AssemblyName, "1.0.0", 42);
-        await using var feed = new SessionAuthenticatedFeed(Path.Combine(fixture.FeedPath, fixture.AssemblyName + ".1.0.0.nupkg"),
+        await using var feed = new SessionAuthenticatedFeed(Path.Join(fixture.FeedPath, fixture.AssemblyName + ".1.0.0.nupkg"),
             fixture.AssemblyName, "1.0.0");
         fixture.UseAuthenticatedFeed(feed);
         await using var controller = await fixture.StartAsync(TestContext.CancellationToken);
@@ -212,11 +213,11 @@ public sealed class SessionPackageTests
     {
         using var fixture = new SessionDependencyFixture();
         fixture.WritePackage(fixture.AssemblyName, "1.0.0", 42);
-        await using var feed = new SessionAuthenticatedFeed(Path.Combine(fixture.FeedPath, fixture.AssemblyName + ".1.0.0.nupkg"),
+        await using var feed = new SessionAuthenticatedFeed(Path.Join(fixture.FeedPath, fixture.AssemblyName + ".1.0.0.nupkg"),
             fixture.AssemblyName, "1.0.0");
         fixture.UseAuthenticatedFeed(feed, credentials: false);
-        var marker = Path.Combine(fixture.DirectoryPath, "provider-request.json");
-        var configuration = Path.Combine(fixture.DirectoryPath, "provider.json");
+        var marker = Path.Join(fixture.DirectoryPath, "provider-request.json");
+        var configuration = Path.Join(fixture.DirectoryPath, "provider.json");
         await File.WriteAllTextAsync(configuration, JsonSerializer.Serialize(new
         {
             username = feed.Username, password = feed.Password, marker,
@@ -263,8 +264,8 @@ public sealed class SessionPackageTests
         Assert.AreEqual(before.PackageLock, after.PackageLock);
         Assert.AreEqual(previous.Identity, after.References.Single().Identity);
         Assert.AreEqual("1.0.0", after.References.Single().Version);
-        Assert.IsTrue(Directory.Exists(Path.Combine(fixture.PackageCachePath, fixture.AssemblyName.ToLowerInvariant(), "1.0.0")));
-        Assert.IsFalse(Directory.Exists(Path.Combine(fixture.PackageCachePath, fixture.AssemblyName.ToLowerInvariant(), "1.5.0")));
+        Assert.IsTrue(Directory.Exists(Path.Join(fixture.PackageCachePath, fixture.AssemblyName.ToLowerInvariant(), "1.0.0")));
+        Assert.IsFalse(Directory.Exists(Path.Join(fixture.PackageCachePath, fixture.AssemblyName.ToLowerInvariant(), "1.5.0")));
         await AssertValueAsync(controller, fixture.AssemblyName, 10);
     }
 
@@ -317,7 +318,7 @@ public sealed class SessionPackageTests
         using var fixture = new SessionDependencyFixture();
         fixture.WritePackage(fixture.AssemblyName, "1.0.0", 21);
         fixture.WritePackage(fixture.AssemblyName, "2.0.0", 84);
-        var path = Path.Combine(fixture.DirectoryPath, "owned dependency.dll");
+        var path = Path.Join(fixture.DirectoryPath, "owned dependency.dll");
         File.WriteAllBytes(path, fixture.PackageImage(fixture.AssemblyName, "1.0.0"));
         await using var controller = await fixture.StartAsync(TestContext.CancellationToken);
         await SubmitAsync(controller, ".load \"" + path + "\"");
@@ -461,7 +462,7 @@ public sealed class SessionPackageTests
             };
         }
 
-        var path = Path.Combine(fixture.DirectoryPath, "foreign.ilrepl.json");
+        var path = Path.Join(fixture.DirectoryPath, "foreign.ilrepl.json");
         await File.WriteAllBytesAsync(path, SessionCodec.Write(document with { PackageLock = parsed.ToJsonString() }),
             TestContext.CancellationToken);
         await SubmitAsync(controller, ".session open \"" + path + "\" --force");
@@ -478,8 +479,8 @@ public sealed class SessionPackageTests
         Assert.AreEqual(changedRequest ? "[2.0.0]" : "[*, )",
             after.References.Single(reference => reference.Request == fixture.AssemblyName).RequestedVersion);
         Assert.AreEqual("1.0.0", after.References.Single(reference => reference.Request == shared).Version);
-        Assert.IsFalse(Directory.Exists(Path.Combine(fixture.PackageCachePath, fixture.AssemblyName.ToLowerInvariant(), "2.0.0")));
-        Assert.IsFalse(Directory.Exists(Path.Combine(fixture.PackageCachePath, "absent.foreign.dependency")));
+        Assert.IsFalse(Directory.Exists(Path.Join(fixture.PackageCachePath, fixture.AssemblyName.ToLowerInvariant(), "2.0.0")));
+        Assert.IsFalse(Directory.Exists(Path.Join(fixture.PackageCachePath, "absent.foreign.dependency")));
         if (corruptHash || changedRequest)
         {
             Assert.Contains(line => line.PlainText.Contains("locked restore", StringComparison.Ordinal), restored.Lines);
@@ -523,7 +524,7 @@ public sealed class SessionPackageTests
         var archived = targets["net10.0/" + runtime]!.DeepClone();
         targets.Remove("net10.0/" + runtime);
         targets["net10.0/" + (OperatingSystem.IsWindows() ? "linux-arm64" : "win-arm64")] = archived;
-        var path = Path.Combine(fixture.DirectoryPath, "runtime-only.ilrepl.json");
+        var path = Path.Join(fixture.DirectoryPath, "runtime-only.ilrepl.json");
         await File.WriteAllBytesAsync(path, SessionCodec.Write(document with { PackageLock = parsed.ToJsonString() }),
             TestContext.CancellationToken);
         await SubmitAsync(controller, ".session open \"" + path + "\" --force");
@@ -532,7 +533,7 @@ public sealed class SessionPackageTests
         {
             fixture.PackageAsset(runtimePackage, "2.0.0", "lib/net11.0/" + runtimePackage + ".dll",
                 fixture.PackageImage(runtimePackage, "2.0.0"));
-            using var archive = ZipFile.Open(Path.Combine(fixture.FeedPath, runtimePackage + ".2.0.0.nupkg"), ZipArchiveMode.Update);
+            using var archive = ZipFile.Open(Path.Join(fixture.FeedPath, runtimePackage + ".2.0.0.nupkg"), ZipArchiveMode.Update);
             archive.GetEntry("lib/net10.0/" + runtimePackage + ".dll")!.Delete();
         }
 
@@ -596,7 +597,7 @@ public sealed class SessionPackageTests
             Assets = [.. document.Assets, .. old.Assets], PackageLock = parsed.ToJsonString(),
         };
 
-        var path = Path.Combine(fixture.DirectoryPath, "incompatible-runtime.ilrepl.json");
+        var path = Path.Join(fixture.DirectoryPath, "incompatible-runtime.ilrepl.json");
         await File.WriteAllBytesAsync(path, SessionCodec.Write(document), TestContext.CancellationToken);
         await SubmitAsync(controller, ".session open \"" + path + "\" --force");
 
@@ -620,7 +621,7 @@ public sealed class SessionPackageTests
         fixture.WritePackage(fixture.AssemblyName, "1.0.0", 42);
         var image = fixture.PackageImage(fixture.AssemblyName, "1.0.0");
         fixture.PackageAsset(fixture.AssemblyName, "1.0.0", "lib/net9.0/" + fixture.AssemblyName + ".dll", image);
-        using (var archive = ZipFile.Open(Path.Combine(fixture.FeedPath, fixture.AssemblyName + ".1.0.0.nupkg"), ZipArchiveMode.Update))
+        using (var archive = ZipFile.Open(Path.Join(fixture.FeedPath, fixture.AssemblyName + ".1.0.0.nupkg"), ZipArchiveMode.Update))
         {
             archive.GetEntry("lib/net10.0/" + fixture.AssemblyName + ".dll")!.Delete();
         }
@@ -628,7 +629,7 @@ public sealed class SessionPackageTests
         await using var controller = await fixture.StartAsync(TestContext.CancellationToken);
         await SubmitAsync(controller, ".load nuget:" + fixture.AssemblyName);
         var document = await CaptureAsync(controller);
-        var path = Path.Combine(fixture.DirectoryPath, "framework.ilrepl.json");
+        var path = Path.Join(fixture.DirectoryPath, "framework.ilrepl.json");
         await File.WriteAllBytesAsync(path, SessionCodec.Write(document with
         {
             Runtime = document.Runtime with { Framework = "net9.0", Description = ".NET 9.0.0" },
@@ -653,20 +654,20 @@ public sealed class SessionPackageTests
     {
         using var fixture = new SessionDependencyFixture();
         fixture.WritePackage(fixture.AssemblyName, "1.0.0", 42);
-        var outside = Path.Combine(fixture.DirectoryPath, "unrelated-profile");
-        foreach (var directory in new[] { Path.Combine(outside, ".nuget", "NuGet"), Path.Combine(outside, "appdata", "NuGet") })
+        var outside = Path.Join(fixture.DirectoryPath, "unrelated-profile");
+        foreach (var directory in new[] { Path.Join(outside, ".nuget", "NuGet"), Path.Join(outside, "appdata", "NuGet") })
         {
             Directory.CreateDirectory(directory);
-            await File.WriteAllTextAsync(Path.Combine(directory, "NuGet.Config"),
+            await File.WriteAllTextAsync(Path.Join(directory, "NuGet.Config"),
                 "<configuration><disabledPackageSources><add key=\"local\" value=\"true\" /></disabledPackageSources></configuration>",
                 TestContext.CancellationToken);
         }
 
         var environment = new Dictionary<string, string?>
         {
-            ["DOTNET_CLI_HOME"] = outside, ["APPDATA"] = Path.Combine(outside, "appdata"),
+            ["DOTNET_CLI_HOME"] = outside, ["APPDATA"] = Path.Join(outside, "appdata"),
             ["NUGET_PACKAGES"] = fixture.PackageCachePath,
-            ["NUGET_COMMON_APPLICATION_DATA"] = Path.Combine(outside, "machine"),
+            ["NUGET_COMMON_APPLICATION_DATA"] = Path.Join(outside, "machine"),
         };
 
         async Task<IReplEngine> StartUnisolated(CancellationToken token) =>
@@ -698,8 +699,8 @@ public sealed class SessionPackageTests
         using var first = new SessionDependencyFixture();
         using var second = new SessionDependencyFixture();
         first.WritePackage(first.AssemblyName, "1.0.0", 42);
-        var path = Path.Combine(first.DirectoryPath, "sessions", "example.ilrepl.json");
-        var renamed = Path.Combine(first.DirectoryPath, "another", "example.ilrepl.json");
+        var path = Path.Join(first.DirectoryPath, "sessions", "example.ilrepl.json");
+        var renamed = Path.Join(first.DirectoryPath, "another", "example.ilrepl.json");
         await using (var controller = await first.StartAsync(TestContext.CancellationToken))
         {
             await SubmitAsync(controller, ".load nuget:" + first.AssemblyName);
@@ -717,7 +718,7 @@ public sealed class SessionPackageTests
         }
 
         Directory.Move(first.PackageCachePath, second.PackageCachePath);
-        var moved = Path.Combine(second.DirectoryPath, "example.ilrepl.json");
+        var moved = Path.Join(second.DirectoryPath, "example.ilrepl.json");
         File.Copy(renamed, moved);
         await using var reopened = await second.StartAsync(TestContext.CancellationToken);
         await SubmitAsync(reopened, ".session open \"" + moved + "\"");

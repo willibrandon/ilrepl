@@ -110,8 +110,8 @@ public sealed class MethodEditCatchTypeTests
             var context = new AssemblyLoadContext("catch-types-export", isCollectible: true);
             try
             {
-                context.LoadFromStream(new MemoryStream(dependencyImage));
-                var exported = context.LoadFromStream(new MemoryStream(image));
+                context.LoadImage(dependencyImage);
+                var exported = context.LoadImage(image);
                 Assert.AreEqual(42, exported.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
             }
             finally

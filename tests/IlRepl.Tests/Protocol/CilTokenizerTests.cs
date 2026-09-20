@@ -17,7 +17,7 @@ public sealed partial class CilTokenizerTests
 {
     private static readonly CilTokenizer Tokenizer = new(CilVocabularyBuilder.Vocabulary);
 
-    private static string FixtureDirectory => Path.Combine(AppContext.BaseDirectory, "Protocol", "Fixtures", "highlight");
+    private static string FixtureDirectory => Path.Join(AppContext.BaseDirectory, "Protocol", "Fixtures", "highlight");
 
     /// <summary>
     /// The fixture files, one row each.
@@ -33,7 +33,7 @@ public sealed partial class CilTokenizerTests
     [DynamicData(nameof(Fixtures))]
     public void Fixtures_EveryCaretMatches(string file)
     {
-        var path = Path.Combine(FixtureDirectory, file);
+        var path = Path.Join(FixtureDirectory, file);
         var cases = HighlightFixture.Parse(path);
         Assert.IsNotEmpty(cases, file);
         var inComment = false;

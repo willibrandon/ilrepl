@@ -333,7 +333,7 @@ public sealed class NativeProcessTests
     [Timeout(90_000, CooperativeCancellation = true)]
     public Task Inspect_CapturedImageSurvivesChangedSourceFile() => IsolatedTestProcess.WithDirectoryAsync(TestContext, async directory =>
     {
-        var path = Path.Combine(directory, "Greeter.dll");
+        var path = Path.Join(directory, "Greeter.dll");
         File.Copy(SampleHost.Samples.GreeterDll, path);
         using var core = new ReplCore();
         core.Session.Resolver.Load(path);

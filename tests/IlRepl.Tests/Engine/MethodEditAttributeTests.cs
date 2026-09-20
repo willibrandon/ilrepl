@@ -53,7 +53,7 @@ public sealed class MethodEditAttributeTests
             var context = new AssemblyLoadContext("attribute-export", isCollectible: true);
             try
             {
-                var exported = context.LoadFromStream(new MemoryStream(image));
+                var exported = context.LoadImage(image);
                 Assert.AreEqual(42, exported.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
                 var owner = exported.GetType(edit.Method.DeclaringType!.FullName!)!;
                 var method = owner.GetMethod("Read")!;

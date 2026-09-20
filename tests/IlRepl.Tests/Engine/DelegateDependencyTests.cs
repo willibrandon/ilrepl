@@ -45,7 +45,7 @@ public sealed class DelegateDependencyTests
             var context = new AssemblyLoadContext("delegate-export", isCollectible: true);
             try
             {
-                var assembly = context.LoadFromStream(new MemoryStream(image));
+                var assembly = context.LoadImage(image);
                 Assert.AreEqual(43, assembly.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
                 AssertDelegate(assembly.GetType(edit.Method.DeclaringType!.FullName!)!, generic);
             }

@@ -49,7 +49,8 @@ public sealed class VarArgObservationIdentityTests
         il.Emit(OpCodes.Call, reference);
         il.Emit(OpCodes.Ret);
         ComparisonInstrumentation.Complete(writer, target, entry);
-        using var exported = ModuleDefinition.ReadModule(new MemoryStream(writer.Write()));
+        using var exportedStream = new MemoryStream(writer.Write());
+        using var exported = ModuleDefinition.ReadModule(exportedStream);
         var exportedOwner = exported.Types.Single(type => type.FullName == "N.Fixture");
         var read = exportedOwner.Methods.Single(method => method.Name == "Read");
         var helpers = read.Body.Instructions.Select(instruction => instruction.Operand).OfType<MethodReference>()

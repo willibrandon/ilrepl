@@ -21,14 +21,14 @@ internal static class IlasmLocator
 
         var package = typeof(IlasmLocator).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
             .FirstOrDefault(attribute => attribute.Key == "IlasmPackagePath")?.Value;
-        if (!string.IsNullOrEmpty(package) && File.Exists(Path.Combine(package, name)))
+        if (!string.IsNullOrEmpty(package) && File.Exists(Path.Join(package, name)))
         {
-            return Path.Combine(package, name);
+            return Path.Join(package, name);
         }
 
         var directories = (Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator)
-            .Append(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "bin"));
-        return directories.Where(d => d.Length > 0).Select(d => Path.Combine(d, name)).FirstOrDefault(File.Exists);
+            .Append(Path.Join(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "bin"));
+        return directories.Where(d => d.Length > 0).Select(d => Path.Join(d, name)).FirstOrDefault(File.Exists);
     }
 
     /// <summary>
@@ -71,8 +71,8 @@ internal static class IlasmLocator
         var directory = Directory.CreateTempSubdirectory("ilrepl-ilasm-").FullName;
         try
         {
-            var il = Path.Combine(directory, "cell.il");
-            var dll = Path.Combine(directory, "cell.dll");
+            var il = Path.Join(directory, "cell.il");
+            var dll = Path.Join(directory, "cell.dll");
             await File.WriteAllTextAsync(il, source, cancellationToken);
             var start = new ProcessStartInfo(Require(), ["-DLL", "-QUIET", "-OUTPUT=" + dll, il])
             {

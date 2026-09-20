@@ -33,7 +33,7 @@ public sealed class StartupDeliveryTests
         var saved = new SessionEditor { Lines = savedDraft ? ["// saved draft"] : [] };
         await files.WriteAsync(files.CompletedDocument(saved), token);
         File.Delete(files.MarkerPath);
-        var marker = Path.Combine(files.DirectoryPath, "new-submission.txt");
+        var marker = Path.Join(files.DirectoryPath, "new-submission.txt");
         var source = "ldstr " + LiteralParser.Escape(marker) + "\nldstr \"sent\"\n"
             + "call File::AppendAllText(string, string)\nldc.i4.s 47\nret";
         var launch = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);

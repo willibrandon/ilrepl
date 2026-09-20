@@ -95,12 +95,10 @@ public static partial class ComparisonWorker
 
             CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo(package.Culture);
             CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo(package.UICulture);
-            foreach (var key in Environment.GetEnvironmentVariables().Keys.Cast<string>().ToArray())
+            foreach (var key in Environment.GetEnvironmentVariables().Keys.Cast<string>().ToArray()
+                .Where(key => !package.Environment.ContainsKey(key)))
             {
-                if (!package.Environment.ContainsKey(key))
-                {
-                    Environment.SetEnvironmentVariable(key, null);
-                }
+                Environment.SetEnvironmentVariable(key, null);
             }
 
             foreach (var pair in package.Environment)

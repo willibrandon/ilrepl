@@ -130,7 +130,7 @@ public sealed class FunctionPointerModifierCompletionTests
             session.AddLine("ret");
             session.AddLine("}");
             session.AddLine("call Check");
-            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".dll");
+            var path = Path.Join(Path.GetTempPath(), Guid.NewGuid() + ".dll");
             try
             {
                 session.Save(path);
@@ -140,7 +140,7 @@ public sealed class FunctionPointerModifierCompletionTests
                     context.Resolving += (_, name) => name.Name == assembly.GetName().Name ? assembly : null;
                     try
                     {
-                        var exported = context.LoadFromStream(new MemoryStream(image));
+                        var exported = context.LoadImage(image);
                         Assert.AreEqual(7 + index, exported.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
                     }
                     finally

@@ -56,7 +56,7 @@ public sealed class DelegateReflectionTests
             var context = new AssemblyLoadContext("named-delegate", isCollectible: true);
             try
             {
-                var assembly = context.LoadFromStream(new MemoryStream(image));
+                var assembly = context.LoadImage(image);
                 Assert.AreEqual(43, assembly.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
                 var hidden = assembly.GetType(edit.Method!.DeclaringType!.FullName!)!.GetMethod("Hidden")!;
                 Assert.IsTrue(hidden.IsPublic);

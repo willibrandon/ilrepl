@@ -45,6 +45,7 @@ internal static class NativeScenarioCapture
         }
 
         var helpers = new Dictionary<MethodBase, (ModuleDefinition Module, string Name)>();
+        var streams = new List<MemoryStream>();
         var pending = new Queue<MethodInfo>();
         pending.Enqueue(scenario);
         try
@@ -62,7 +63,10 @@ internal static class NativeScenarioCapture
                     throw new ReplException("the native scenario helper has no retained image");
                 }
 
-                var module = ModuleDefinition.ReadModule(new MemoryStream(definition.Image, writable: false));
+                // Cecil reads a module on demand, so its stream stays open for as long as the module is in use.
+                var stream = new MemoryStream(definition.Image, writable: false);
+                streams.Add(stream);
+                var module = ModuleDefinition.ReadModule(stream);
                 var name = "ilrepl.native.scenario." + Guid.NewGuid().ToString("N");
                 module.Assembly.Name.Name = name;
                 module.Name = name + ".dll";
@@ -215,6 +219,11 @@ internal static class NativeScenarioCapture
             foreach (var helper in helpers.Values)
             {
                 helper.Module.Dispose();
+            }
+
+            foreach (var stream in streams)
+            {
+                stream.Dispose();
             }
         }
     }

@@ -53,7 +53,7 @@ public sealed class TranscriptTests
     public void Transcripts_ProduceExpectedValues()
     {
         var core = new ReplCore();
-        foreach (var line in File.ReadAllLines(Path.Combine(RepoPaths.Transcripts, "exceptions.il")))
+        foreach (var line in File.ReadAllLines(Path.Join(RepoPaths.Transcripts, "exceptions.il")))
         {
             core.Handle(line);
         }
@@ -72,7 +72,7 @@ public sealed class TranscriptTests
     public void Transcripts_MethodsProduceExpectedValues()
     {
         var core = new ReplCore();
-        foreach (var line in File.ReadAllLines(Path.Combine(RepoPaths.Transcripts, "methods.il")))
+        foreach (var line in File.ReadAllLines(Path.Join(RepoPaths.Transcripts, "methods.il")))
         {
             core.Handle(line);
         }
@@ -99,7 +99,7 @@ public sealed class TranscriptTests
     public void Transcripts_TypesProduceExpectedValues()
     {
         var core = new ReplCore();
-        foreach (var line in File.ReadAllLines(Path.Combine(RepoPaths.Transcripts, "types.il")))
+        foreach (var line in File.ReadAllLines(Path.Join(RepoPaths.Transcripts, "types.il")))
         {
             core.Handle(line);
         }
@@ -121,7 +121,7 @@ public sealed class TranscriptTests
     public void Transcripts_DisassemblyListsBodies()
     {
         var core = new ReplCore();
-        foreach (var line in File.ReadAllLines(Path.Combine(RepoPaths.Transcripts, "disassembly.il")))
+        foreach (var line in File.ReadAllLines(Path.Join(RepoPaths.Transcripts, "disassembly.il")))
         {
             core.Handle(line);
         }

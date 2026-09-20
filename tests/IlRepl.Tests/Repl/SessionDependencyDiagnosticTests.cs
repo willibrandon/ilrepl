@@ -59,7 +59,7 @@ public sealed class SessionDependencyDiagnosticTests
     public async Task MissingReference_PreservesRecoveryGuidanceAcrossSessionPaths(string kind, bool canRestore)
     {
         using var files = new SessionDependencyFixture();
-        var changedPath = Path.Combine(files.DirectoryPath, "changed.dll");
+        var changedPath = Path.Join(files.DirectoryPath, "changed.dll");
         File.WriteAllBytes(changedPath, [1]);
         var reference = new SessionReference
         {

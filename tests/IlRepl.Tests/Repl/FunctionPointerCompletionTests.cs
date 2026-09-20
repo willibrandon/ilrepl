@@ -153,7 +153,7 @@ public sealed class FunctionPointerCompletionTests
         context.Resolving += (_, name) => name.Name == assembly.GetName().Name ? assembly : null;
         try
         {
-            var exported = context.LoadFromStream(new MemoryStream(image));
+            var exported = context.LoadImage(image);
             Assert.AreEqual(7, exported.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
         }
         finally

@@ -34,7 +34,7 @@ public sealed class ExportConformanceTests
         var directory = Directory.CreateTempSubdirectory("ilrepl-atomic-export-").FullName;
         try
         {
-            var path = Path.Combine(directory, "kept.dll");
+            var path = Path.Join(directory, "kept.dll");
             byte[] original = [1, 3, 5, 7];
             File.WriteAllBytes(path, original);
             var complete = IlLines.Load("ldc.i4.s 42");
@@ -89,7 +89,7 @@ public sealed class ExportConformanceTests
         var directory = Directory.CreateTempSubdirectory("ilrepl-interrupted-export-").FullName;
         try
         {
-            var path = Path.Combine(directory, "original.dll");
+            var path = Path.Join(directory, "original.dll");
             byte[] original = [2, 4, 6];
             File.WriteAllBytes(path, original);
             var image = new byte[imageSize];

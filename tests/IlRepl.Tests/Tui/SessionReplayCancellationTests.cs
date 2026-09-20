@@ -28,7 +28,7 @@ public sealed class SessionReplayCancellationTests
     {
         var token = TestContext.CancellationToken;
         using var files = new SessionWorkspaceFixture();
-        var document = replay ? Document(files.MarkerPath, Path.Combine(files.DirectoryPath, "later.txt")) : new SessionDocument();
+        var document = replay ? Document(files.MarkerPath, Path.Join(files.DirectoryPath, "later.txt")) : new SessionDocument();
         await files.WriteAsync(document, token);
         var original = await File.ReadAllBytesAsync(files.SessionPath, token);
         await using var engine = await SessionWorkspaceFixture.StartAsync(token);
@@ -77,7 +77,7 @@ public sealed class SessionReplayCancellationTests
     {
         var token = TestContext.CancellationToken;
         using var files = new SessionWorkspaceFixture();
-        var secondMarker = Path.Combine(files.DirectoryPath, "second-cell.txt");
+        var secondMarker = Path.Join(files.DirectoryPath, "second-cell.txt");
         var source = Document(files.MarkerPath, secondMarker);
         await files.WriteAsync(source, token);
         var original = await File.ReadAllBytesAsync(files.SessionPath, token);

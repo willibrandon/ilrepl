@@ -195,7 +195,7 @@ public sealed class ExactBoundaryTests
                 : name.Name == helper.GetName().Name ? helper : null;
             try
             {
-                var exported = context.LoadFromStream(new MemoryStream(image));
+                var exported = context.LoadImage(image);
                 Assert.AreEqual(expected, exported.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
                 Assert.AreEqual(expected, exported.GetType(edit.Method!.DeclaringType!.FullName!)!.GetMethod("Read")!.Invoke(null, null));
             }
@@ -208,7 +208,8 @@ public sealed class ExactBoundaryTests
 
     private static void AssertCopiedSignature(byte[] image, string ownerName, string kind)
     {
-        using var module = ModuleDefinition.ReadModule(new MemoryStream(image));
+        using var moduleStream = new MemoryStream(image);
+        using var module = ModuleDefinition.ReadModule(moduleStream);
         var owner = module.Types.Single(type => type.FullName == ownerName);
         var read = owner.Methods.Single(method => method.Name == "Read");
         var helper = read.Body.Instructions.Select(instruction => instruction.Operand).OfType<MethodReference>()

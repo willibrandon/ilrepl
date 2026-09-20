@@ -68,7 +68,7 @@ public sealed class AnalysisRequester(IReplEngine engine)
 
         if (_active is { Task.IsCompleted: true } settled)
         {
-            settled.Cancellation.Dispose();
+            settled.Dispose();
             _active = null;
         }
 
@@ -164,7 +164,7 @@ public sealed class AnalysisRequester(IReplEngine engine)
                 await active.Task.WaitAsync(timeout).ConfigureAwait(false);
             }
 
-            active.Cancellation.Dispose();
+            active.Dispose();
             _active = null;
         }
 

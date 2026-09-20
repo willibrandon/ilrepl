@@ -109,7 +109,8 @@ public sealed partial class DisassemblyFidelityTests
             il.Emit(OpCodes.Ret);
         }, session.Resolver);
 
-        var module = ModuleDefinition.ReadModule(new MemoryStream(image));
+        using var moduleStream = new MemoryStream(image);
+        var module = ModuleDefinition.ReadModule(moduleStream);
         var cecil = module.Types.First(t => t.Name == "Fixture").Methods.First(m => m.Name == "M");
         var ours = MethodDisassembler.Disassemble(fixture.GetMethod("M")!, session);
         CecilOracle.AssertSameDecoding(cecil, ours);
@@ -189,7 +190,8 @@ public sealed partial class DisassemblyFidelityTests
             var ours = MethodDisassembler.Disassemble(runtime, session);
             var source = Scaffold(ours);
             var image = IlasmLocator.Assemble(source);
-            var reassembled = ModuleDefinition.ReadModule(new MemoryStream(image));
+            using var reassembledStream = new MemoryStream(image);
+            var reassembled = ModuleDefinition.ReadModule(reassembledStream);
             var method = reassembled.Types.First(t => t.Name == "T").Methods.Single(m => m.HasBody);
             CecilOracle.AssertSameMeaning(cecil, method, assembly.GetName().FullName, assembly.GetName().FullName, originalImage, image);
             if (cecil.Name == "Guarded")
@@ -208,7 +210,7 @@ public sealed partial class DisassemblyFidelityTests
         Assert.IsGreaterThan(15, count);
         Assert.IsNotNull(guarded);
         var context = new AssemblyLoadContext("ilasm-guarded", isCollectible: true);
-        var loaded = context.LoadFromStream(new MemoryStream(guarded));
+        var loaded = context.LoadImage(guarded);
         var run = loaded.GetType("N.T")!.GetMethod("Guarded")!;
         Assert.AreEqual(11, run.Invoke(null, [true]));
         Assert.AreEqual(2, run.Invoke(null, [false]));
@@ -217,7 +219,7 @@ public sealed partial class DisassemblyFidelityTests
         // A reference to a core type binds through the facade that exports it, so the reassembled body loads and runs.
         Assert.IsNotNull(open);
         var openContext = new AssemblyLoadContext("ilasm-open", isCollectible: true);
-        var openLoaded = openContext.LoadFromStream(new MemoryStream(open));
+        var openLoaded = openContext.LoadImage(open);
         Assert.AreEqual(typeof(List<>), openLoaded.GetType("N.T")!.GetMethod("Open")!.Invoke(null, null));
         openContext.Unload();
     }
@@ -237,14 +239,16 @@ public sealed partial class DisassemblyFidelityTests
         Assert.AreEqual(2, fixture.GetMethod("M")!.Invoke(null, null), "the original dispatches to the Exception handler first");
         var listing = MethodDisassembler.Disassemble(fixture.GetMethod("M")!, session);
         var reassembled = IlasmLocator.Assemble(Scaffold(listing));
-        var original = ModuleDefinition.ReadModule(new MemoryStream(image)).Types.First(t => t.Name == "Fixture")
+        using var originalStream = new MemoryStream(image);
+        var original = ModuleDefinition.ReadModule(originalStream).Types.First(t => t.Name == "Fixture")
             .Methods.First(m => m.Name == "M");
-        var method = ModuleDefinition.ReadModule(new MemoryStream(reassembled)).Types.First(t => t.Name == "T")
+        using var methodStream = new MemoryStream(reassembled);
+        var method = ModuleDefinition.ReadModule(methodStream).Types.First(t => t.Name == "T")
             .Methods.Single(m => m.HasBody);
         CecilOracle.AssertSameMeaning(original, method, fixture.Assembly.GetName().FullName, fixture.Assembly.GetName().FullName, image,
             reassembled);
         var context = new AssemblyLoadContext("ilasm-order", isCollectible: true);
-        var loaded = context.LoadFromStream(new MemoryStream(reassembled));
+        var loaded = context.LoadImage(reassembled);
         Assert.AreEqual(2, loaded.GetType("N.T")!.GetMethod("M")!.Invoke(null, null), "the reassembled body dispatches the same way");
         context.Unload();
     }
@@ -257,9 +261,11 @@ public sealed partial class DisassemblyFidelityTests
     {
         var session = new Session();
         var (assembly, image, _) = CecilFixture.Build(MethodDisassemblerTests.AddOutOfOrderHandlers, session.Resolver);
-        var original = ModuleDefinition.ReadModule(new MemoryStream(image)).Types.First(t => t.Name == "Fixture")
+        using var originalStream = new MemoryStream(image);
+        var original = ModuleDefinition.ReadModule(originalStream).Types.First(t => t.Name == "Fixture")
             .Methods.First(m => m.Name == "M");
-        var changed = ModuleDefinition.ReadModule(new MemoryStream(image)).Types.First(t => t.Name == "Fixture")
+        using var changedStream = new MemoryStream(image);
+        var changed = ModuleDefinition.ReadModule(changedStream).Types.First(t => t.Name == "Fixture")
             .Methods.First(m => m.Name == "M");
         var handlers = changed.Body.ExceptionHandlers.ToList();
         changed.Body.ExceptionHandlers.Clear();
@@ -634,16 +640,18 @@ public sealed partial class DisassemblyFidelityTests
         var (assembly, image, fixture) = CecilFixture.Build(MethodDisassemblerTests.AddBackslashTypes, session.Resolver);
         var listing = MethodDisassembler.Disassemble(fixture.GetMethod("M")!, session);
         var reassembled = IlasmLocator.Assemble(Scaffold(listing));
-        var original = ModuleDefinition.ReadModule(new MemoryStream(image)).Types.First(t => t.Name == "Fixture")
+        using var originalStream = new MemoryStream(image);
+        var original = ModuleDefinition.ReadModule(originalStream).Types.First(t => t.Name == "Fixture")
             .Methods.First(m => m.Name == "M");
-        var method = ModuleDefinition.ReadModule(new MemoryStream(reassembled)).Types.First(t => t.Name == "T")
+        using var methodStream = new MemoryStream(reassembled);
+        var method = ModuleDefinition.ReadModule(methodStream).Types.First(t => t.Name == "T")
             .Methods.Single(m => m.HasBody);
         CecilOracle.AssertSameMeaning(original, method, assembly.GetName().FullName, assembly.GetName().FullName, image, reassembled);
         var context = new AssemblyLoadContext("ilasm-backslash", isCollectible: true);
         try
         {
             context.Resolving += (_, requested) => requested.FullName == assembly.FullName ? assembly : null;
-            var loaded = context.LoadFromStream(new MemoryStream(reassembled));
+            var loaded = context.LoadImage(reassembled);
             Assert.AreEqual(1, loaded.GetType("N.T")!.GetMethod("M")!.Invoke(null, null));
         }
         finally
@@ -672,7 +680,7 @@ public sealed partial class DisassemblyFidelityTests
             $"[System.Runtime]System.Type::GetTypeFromHandle(valuetype [System.Runtime]System.RuntimeTypeHandle)\n    ret\n  }}\n}}\n";
         var image = IlasmLocator.Assemble(source);
         var context = new AssemblyLoadContext("ilasm-marvin", isCollectible: true);
-        var loaded = context.LoadFromStream(new MemoryStream(image));
+        var loaded = context.LoadImage(image);
         Assert.AreEqual(marvin, loaded.GetType("N.T")!.GetMethod("M")!.Invoke(null, null));
         context.Unload();
     }

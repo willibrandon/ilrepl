@@ -110,7 +110,7 @@ public sealed class EditedParameterDefaultTests
             var context = new AssemblyLoadContext("null-default", isCollectible: true);
             try
             {
-                var assembly = context.LoadFromStream(new MemoryStream(image));
+                var assembly = context.LoadImage(image);
                 foreach (var source in new[] { edit.Method!, session.TypeTable.MethodAliases[edit.Name] })
                 {
                     var method = ExportedMethod(assembly, source);
@@ -160,7 +160,7 @@ public sealed class EditedParameterDefaultTests
             var context = new AssemblyLoadContext("added-parameter-default", isCollectible: true);
             try
             {
-                var assembly = context.LoadFromStream(new MemoryStream(image));
+                var assembly = context.LoadImage(image);
                 foreach (var method in new[] { edit.Method!, alias })
                 {
                     AssertAddedDefault(ExportedMethod(assembly, method));
@@ -247,7 +247,7 @@ public sealed class EditedParameterDefaultTests
             var context = new AssemblyLoadContext("parameter-default", isCollectible: true);
             try
             {
-                var assembly = context.LoadFromStream(new MemoryStream(image));
+                var assembly = context.LoadImage(image);
                 foreach (var source in new[] { edit.Method!, alias })
                 {
                     var method = ExportedMethod(assembly, source);

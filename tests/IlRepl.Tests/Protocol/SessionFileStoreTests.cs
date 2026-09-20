@@ -24,9 +24,9 @@ public sealed class SessionFileStoreTests
         var directory = Directory.CreateTempSubdirectory("ilrepl-store-").FullName;
         try
         {
-            var path = Path.Combine(directory, "example.ilrepl.json");
+            var path = Path.Join(directory, "example.ilrepl.json");
             var relative = Path.GetRelativePath(Environment.CurrentDirectory, path);
-            var store = new SessionFileStore(Path.Combine(directory, "cache"));
+            var store = new SessionFileStore(Path.Join(directory, "cache"));
             await store.WriteAsync(relative, Document("ldc.i4.1"), embed: false, TestContext.CancellationToken);
             var associated = await store.WriteAsync(relative, Document("ldc.i4.2"), embed: true, TestContext.CancellationToken);
 
@@ -50,11 +50,11 @@ public sealed class SessionFileStoreTests
         var directory = Directory.CreateTempSubdirectory("ilrepl-store-parents-").FullName;
         try
         {
-            var path = Path.Combine(directory, "new", "nested", "example.ilrepl.json");
-            var store = new SessionFileStore(Path.Combine(directory, "cache"));
+            var path = Path.Join(directory, "new", "nested", "example.ilrepl.json");
+            var store = new SessionFileStore(Path.Join(directory, "cache"));
             Assert.AreEqual(path, await store.WriteAsync(path, Document("ldc.i4.1"), false, TestContext.CancellationToken));
             Assert.AreSequenceEqual(["ldc.i4.1"], (await store.ReadAsync(path, TestContext.CancellationToken)).Editor.Lines);
-            var impossible = Path.Combine(path, "child.ilrepl.json");
+            var impossible = Path.Join(path, "child.ilrepl.json");
             var error = await Assert.ThrowsExactlyAsync<IOException>(() =>
                 store.WriteAsync(impossible, Document("ldc.i4.2"), false, TestContext.CancellationToken));
             Assert.StartsWith("could not save session '" + impossible + "':", error.Message);
@@ -76,8 +76,8 @@ public sealed class SessionFileStoreTests
         var directory = Directory.CreateTempSubdirectory("ilrepl-store-atomic-").FullName;
         try
         {
-            var path = Path.Combine(directory, "example.ilrepl.json");
-            var store = new SessionFileStore(Path.Combine(directory, "cache"));
+            var path = Path.Join(directory, "example.ilrepl.json");
+            var store = new SessionFileStore(Path.Join(directory, "cache"));
             var first = Document(new string('a', 64 * 1024));
             var second = Document(new string('b', 64 * 1024));
             var token = TestContext.CancellationToken;
@@ -144,9 +144,9 @@ public sealed class SessionFileStoreTests
         var directory = Directory.CreateTempSubdirectory("ilrepl-store-reader-").FullName;
         try
         {
-            var parent = longPath ? Path.Combine(directory, new string('a', 100), new string('b', 100), new string('c', 100)) : directory;
-            var path = Path.Combine(parent, name);
-            var store = new SessionFileStore(Path.Combine(directory, "cache"));
+            var parent = longPath ? Path.Join(directory, new string('a', 100), new string('b', 100), new string('c', 100)) : directory;
+            var path = Path.Join(parent, name);
+            var store = new SessionFileStore(Path.Join(directory, "cache"));
             var token = TestContext.CancellationToken;
             await store.WriteAsync(path, Document("ldc.i4.1"), false, token);
             await using var reader = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete);
@@ -175,11 +175,11 @@ public sealed class SessionFileStoreTests
         var directory = Directory.CreateTempSubdirectory("ilrepl-store-paths-").FullName;
         try
         {
-            Directory.CreateDirectory(Path.Combine(directory, ".git"));
-            var firstDirectory = Directory.CreateDirectory(Path.Combine(directory, "first")).FullName;
-            var secondDirectory = Directory.CreateDirectory(Path.Combine(directory, "second folder λ")).FullName;
-            var assetPath = Path.Combine(directory, "dependency.dll");
-            var projectPath = Path.Combine(directory, "fixture.csproj");
+            Directory.CreateDirectory(Path.Join(directory, ".git"));
+            var firstDirectory = Directory.CreateDirectory(Path.Join(directory, "first")).FullName;
+            var secondDirectory = Directory.CreateDirectory(Path.Join(directory, "second folder λ")).FullName;
+            var assetPath = Path.Join(directory, "dependency.dll");
+            var projectPath = Path.Join(directory, "fixture.csproj");
             byte[] image = [3, 1, 4, 1, 5];
             await File.WriteAllBytesAsync(assetPath, image, TestContext.CancellationToken);
             await File.WriteAllTextAsync(projectPath, "<Project />", TestContext.CancellationToken);
@@ -195,9 +195,9 @@ public sealed class SessionFileStoreTests
             };
 
             var original = SessionCodec.Write(document);
-            var store = new SessionFileStore(Path.Combine(directory, "cache"));
-            var firstPath = Path.Combine(firstDirectory, "first.ilrepl.json");
-            var secondPath = Path.Combine(secondDirectory, "second.ilrepl.json");
+            var store = new SessionFileStore(Path.Join(directory, "cache"));
+            var firstPath = Path.Join(firstDirectory, "first.ilrepl.json");
+            var secondPath = Path.Join(secondDirectory, "second.ilrepl.json");
             await store.WriteAsync(firstPath, document, embed: false, TestContext.CancellationToken);
             var opened = await store.ReadAsync(firstPath, TestContext.CancellationToken);
             Assert.AreEqual(assetPath, opened.References[0].Request);
@@ -235,16 +235,16 @@ public sealed class SessionFileStoreTests
         var directory = Directory.CreateTempSubdirectory("ilrepl-store-relative-").FullName;
         try
         {
-            Directory.CreateDirectory(Path.Combine(directory, ".git"));
-            var documentDirectory = Directory.CreateDirectory(Path.Combine(directory, "documents")).FullName;
-            var source = Path.Combine(directory, "source.dll");
+            Directory.CreateDirectory(Path.Join(directory, ".git"));
+            var documentDirectory = Directory.CreateDirectory(Path.Join(directory, "documents")).FullName;
+            var source = Path.Join(directory, "source.dll");
             byte[] image = [1, 2, 3];
             await File.WriteAllBytesAsync(source, image, TestContext.CancellationToken);
             var relative = Path.GetRelativePath(Environment.CurrentDirectory, source);
             var document = Referencing(source, image);
             document = document with { References = [document.References[0] with { Request = relative }] };
-            var path = Path.Combine(documentDirectory, "example.ilrepl.json");
-            var store = new SessionFileStore(Path.Combine(directory, "cache"));
+            var path = Path.Join(documentDirectory, "example.ilrepl.json");
+            var store = new SessionFileStore(Path.Join(directory, "cache"));
 
             await store.WriteAsync(path, document, embed: false, TestContext.CancellationToken);
             var saved = SessionCodec.Read(await File.ReadAllBytesAsync(path, TestContext.CancellationToken));
@@ -270,13 +270,13 @@ public sealed class SessionFileStoreTests
         try
         {
             byte[] image = [1, 2, 3];
-            var binaries = Directory.CreateDirectory(Path.Combine(directory, "binaries")).FullName;
-            var source = Path.Combine(binaries, "source.dll");
+            var binaries = Directory.CreateDirectory(Path.Join(directory, "binaries")).FullName;
+            var source = Path.Join(binaries, "source.dll");
             await File.WriteAllBytesAsync(source, image, TestContext.CancellationToken);
             var document = Referencing("binaries\\source.dll", image) with { Assets = [] };
-            var path = Path.Combine(directory, "example.ilrepl.json");
+            var path = Path.Join(directory, "example.ilrepl.json");
             await File.WriteAllBytesAsync(path, SessionCodec.Write(document), TestContext.CancellationToken);
-            var store = new SessionFileStore(Path.Combine(directory, "cache"));
+            var store = new SessionFileStore(Path.Join(directory, "cache"));
 
             var opened = await store.ReadAsync(path, TestContext.CancellationToken);
 
@@ -320,25 +320,25 @@ public sealed class SessionFileStoreTests
                     new()
                     {
                         Identity = "dependency",
-                        Request = Path.Combine(directory, "removed.dll"),
+                        Request = Path.Join(directory, "removed.dll"),
                         Assets = [new() { Name = "Dependency", Hash = dependencyHash }],
                     },
                 ],
                 Assets = [new() { Hash = baselineHash, Image = baseline }, new() { Hash = dependencyHash, Image = dependency }],
             };
 
-            var cache = Path.Combine(directory, "cache");
+            var cache = Path.Join(directory, "cache");
             var store = new SessionFileStore(cache);
-            var path = Path.Combine(directory, "example.ilrepl.json");
+            var path = Path.Join(directory, "example.ilrepl.json");
             await store.WriteAsync(path, document, embed, TestContext.CancellationToken);
 
             var serialized = SessionCodec.Read(await File.ReadAllBytesAsync(path, TestContext.CancellationToken));
             Assert.HasCount(embed ? 2 : 1, serialized.Assets);
             Assert.Contains(asset => asset.Hash == baselineHash && asset.Image.SequenceEqual(baseline), serialized.Assets);
             Assert.AreSequenceEqual(dependency,
-                await File.ReadAllBytesAsync(Path.Combine(cache, dependencyHash), TestContext.CancellationToken));
+                await File.ReadAllBytesAsync(Path.Join(cache, dependencyHash), TestContext.CancellationToken));
             Assert.AreSequenceEqual(baseline,
-                await File.ReadAllBytesAsync(Path.Combine(cache, baselineHash), TestContext.CancellationToken));
+                await File.ReadAllBytesAsync(Path.Join(cache, baselineHash), TestContext.CancellationToken));
             var reopened = await store.ReadAsync(path, TestContext.CancellationToken);
             Assert.HasCount(2, reopened.Assets);
             Assert.Contains(asset => asset.Hash == dependencyHash && asset.Image.SequenceEqual(dependency), reopened.Assets);
@@ -366,13 +366,13 @@ public sealed class SessionFileStoreTests
         {
             byte[] original = [1, 2, 3];
             byte[] changed = [4, 5, 6];
-            var source = Path.Combine(directory, "source.dll");
-            var cache = Path.Combine(directory, "cache");
-            var path = Path.Combine(directory, "example.ilrepl.json");
+            var source = Path.Join(directory, "source.dll");
+            var cache = Path.Join(directory, "cache");
+            var path = Path.Join(directory, "example.ilrepl.json");
             var store = new SessionFileStore(cache);
             await store.WriteAsync(path, Referencing(source, original), embed: true, TestContext.CancellationToken);
             await File.WriteAllBytesAsync(source, changed, TestContext.CancellationToken);
-            await File.WriteAllBytesAsync(Path.Combine(cache, SessionCodec.Hash(original)), changed, TestContext.CancellationToken);
+            await File.WriteAllBytesAsync(Path.Join(cache, SessionCodec.Hash(original)), changed, TestContext.CancellationToken);
 
             var opened = await store.ReadAsync(path, TestContext.CancellationToken);
             var asset = Assert.ContainsSingle(opened.Assets);
@@ -399,9 +399,9 @@ public sealed class SessionFileStoreTests
         try
         {
             byte[] original = [1, 2, 3];
-            var source = Path.Combine(directory, "source.dll");
-            var cache = Path.Combine(directory, "cache");
-            var path = Path.Combine(directory, "example.ilrepl.json");
+            var source = Path.Join(directory, "source.dll");
+            var cache = Path.Join(directory, "cache");
+            var path = Path.Join(directory, "example.ilrepl.json");
             var store = new SessionFileStore(cache);
             await store.WriteAsync(path, Referencing(source, original), embed: false, TestContext.CancellationToken);
             if (!cached)
@@ -440,13 +440,13 @@ public sealed class SessionFileStoreTests
         try
         {
             byte[] image = [5, 4, 3, 2, 1];
-            var source = Path.Combine(directory, "source.dll");
-            var cache = Path.Combine(directory, "cache");
-            var path = Path.Combine(directory, "example.ilrepl.json");
+            var source = Path.Join(directory, "source.dll");
+            var cache = Path.Join(directory, "cache");
+            var path = Path.Join(directory, "example.ilrepl.json");
             var store = new SessionFileStore(cache);
             await File.WriteAllBytesAsync(source, image, TestContext.CancellationToken);
             await store.WriteAsync(path, Referencing(source, image), embed: false, TestContext.CancellationToken);
-            var cachePath = Path.Combine(cache, SessionCodec.Hash(image));
+            var cachePath = Path.Join(cache, SessionCodec.Hash(image));
             await using (var stream = new FileStream(cachePath, FileMode.Create, FileAccess.Write, FileShare.None))
             {
                 stream.SetLength(oversized ? SessionCodec.FileLimit + 1L : 1L);
@@ -473,10 +473,10 @@ public sealed class SessionFileStoreTests
         var directory = Directory.CreateTempSubdirectory("ilrepl-store-missing-").FullName;
         try
         {
-            var path = Path.Combine(directory, "example.ilrepl.json");
-            var missing = Path.Combine(directory, "missing.dll");
+            var path = Path.Join(directory, "example.ilrepl.json");
+            var missing = Path.Join(directory, "missing.dll");
             var document = Referencing(missing, [1]) with { Assets = [] };
-            var store = new SessionFileStore(Path.Combine(directory, "cache"));
+            var store = new SessionFileStore(Path.Join(directory, "cache"));
             await store.WriteAsync(path, document, embed: false, TestContext.CancellationToken);
 
             var opened = await store.ReadAsync(path, TestContext.CancellationToken);
@@ -504,17 +504,17 @@ public sealed class SessionFileStoreTests
         var directory = Directory.CreateTempSubdirectory("ilrepl-store-invalid-").FullName;
         try
         {
-            var path = Path.Combine(directory, "example.ilrepl.json");
+            var path = Path.Join(directory, "example.ilrepl.json");
             var content = corruptAsset
                 ? "{\"format\":\"ilrepl-session\",\"version\":1,\"assets\":[{\"hash\":\"" + SessionCodec.Hash([1])
                     + "\",\"image\":\"Ag==\"}]}"
                 : "{ invalid JSON";
             await File.WriteAllTextAsync(path, content, TestContext.CancellationToken);
-            var store = new SessionFileStore(Path.Combine(directory, "cache"));
+            var store = new SessionFileStore(Path.Join(directory, "cache"));
 
             await Assert.ThrowsExactlyAsync<InvalidDataException>(() => store.ReadAsync(path, TestContext.CancellationToken));
             Assert.AreEqual(content, await File.ReadAllTextAsync(path, TestContext.CancellationToken));
-            Assert.IsFalse(Directory.Exists(Path.Combine(directory, "cache")));
+            Assert.IsFalse(Directory.Exists(Path.Join(directory, "cache")));
         }
         finally
         {
@@ -531,8 +531,8 @@ public sealed class SessionFileStoreTests
         var directory = Directory.CreateTempSubdirectory("ilrepl-store-absent-").FullName;
         try
         {
-            var store = new SessionFileStore(Path.Combine(directory, "cache"));
-            var path = Path.Combine(directory, "missing.ilrepl.json");
+            var store = new SessionFileStore(Path.Join(directory, "cache"));
+            var path = Path.Join(directory, "missing.ilrepl.json");
             var error = await Assert.ThrowsExactlyAsync<FileNotFoundException>(() => store.ReadAsync(path, TestContext.CancellationToken));
             Assert.AreEqual(path, error.FileName);
             Assert.AreEqual("session file does not exist: " + path, error.Message);
@@ -553,10 +553,10 @@ public sealed class SessionFileStoreTests
         var directory = Directory.CreateTempSubdirectory("ilrepl-store-cancel-").FullName;
         try
         {
-            var path = Path.Combine(directory, "example.ilrepl.json");
+            var path = Path.Join(directory, "example.ilrepl.json");
             var original = SessionCodec.Write(Document("ldc.i4.1"));
             await File.WriteAllBytesAsync(path, original, TestContext.CancellationToken);
-            var store = new SessionFileStore(Path.Combine(directory, "cache"));
+            var store = new SessionFileStore(Path.Join(directory, "cache"));
             using var cancellation = new CancellationTokenSource();
             await cancellation.CancelAsync();
 
@@ -580,19 +580,19 @@ public sealed class SessionFileStoreTests
         var directory = Directory.CreateTempSubdirectory("ilrepl-store-failure-").FullName;
         try
         {
-            var path = Path.Combine(directory, "example.ilrepl.json");
+            var path = Path.Join(directory, "example.ilrepl.json");
             var original = SessionCodec.Write(Document("ldc.i4.1"));
             await File.WriteAllBytesAsync(path, original, TestContext.CancellationToken);
             byte[] image = [3, 2, 1];
-            var cache = Directory.CreateDirectory(Path.Combine(directory, "cache")).FullName;
-            var collision = Directory.CreateDirectory(Path.Combine(cache, SessionCodec.Hash(image))).FullName;
-            await File.WriteAllTextAsync(Path.Combine(collision, "keep"), "original", TestContext.CancellationToken);
+            var cache = Directory.CreateDirectory(Path.Join(directory, "cache")).FullName;
+            var collision = Directory.CreateDirectory(Path.Join(cache, SessionCodec.Hash(image))).FullName;
+            await File.WriteAllTextAsync(Path.Join(collision, "keep"), "original", TestContext.CancellationToken);
             var store = new SessionFileStore(cache);
 
             await AssertWriteFailureAsync(() =>
-                store.WriteAsync(path, Referencing(Path.Combine(directory, "source.dll"), image), false, TestContext.CancellationToken));
+                store.WriteAsync(path, Referencing(Path.Join(directory, "source.dll"), image), false, TestContext.CancellationToken));
             Assert.AreSequenceEqual(original, await File.ReadAllBytesAsync(path, TestContext.CancellationToken));
-            Assert.AreEqual("original", await File.ReadAllTextAsync(Path.Combine(collision, "keep"), TestContext.CancellationToken));
+            Assert.AreEqual("original", await File.ReadAllTextAsync(Path.Join(collision, "keep"), TestContext.CancellationToken));
             Assert.IsEmpty(Directory.GetFiles(directory, "*.tmp", SearchOption.AllDirectories));
         }
         finally
@@ -610,10 +610,10 @@ public sealed class SessionFileStoreTests
         var directory = Directory.CreateTempSubdirectory("ilrepl-store-rename-").FullName;
         try
         {
-            var path = Directory.CreateDirectory(Path.Combine(directory, "example.ilrepl.json")).FullName;
-            var marker = Path.Combine(path, "keep");
+            var path = Directory.CreateDirectory(Path.Join(directory, "example.ilrepl.json")).FullName;
+            var marker = Path.Join(path, "keep");
             await File.WriteAllTextAsync(marker, "original", TestContext.CancellationToken);
-            var store = new SessionFileStore(Path.Combine(directory, "cache"));
+            var store = new SessionFileStore(Path.Join(directory, "cache"));
 
             await AssertWriteFailureAsync(() => store.WriteAsync(path, Document("ldc.i4.2"), false, TestContext.CancellationToken));
             Assert.AreEqual("original", await File.ReadAllTextAsync(marker, TestContext.CancellationToken));
@@ -634,10 +634,10 @@ public sealed class SessionFileStoreTests
         var directory = Directory.CreateTempSubdirectory("ilrepl-store-validation-").FullName;
         try
         {
-            var path = Path.Combine(directory, "example.ilrepl.json");
+            var path = Path.Join(directory, "example.ilrepl.json");
             var original = SessionCodec.Write(Document("ldc.i4.1"));
             await File.WriteAllBytesAsync(path, original, TestContext.CancellationToken);
-            var cache = Path.Combine(directory, "cache");
+            var cache = Path.Join(directory, "cache");
             var store = new SessionFileStore(cache);
 
             await Assert.ThrowsExactlyAsync<InvalidDataException>(() =>
@@ -661,12 +661,12 @@ public sealed class SessionFileStoreTests
         var directory = Directory.CreateTempSubdirectory("ilrepl-store-limit-").FullName;
         try
         {
-            var path = Path.Combine(directory, "example.ilrepl.json");
+            var path = Path.Join(directory, "example.ilrepl.json");
             var bytes = new byte[SessionCodec.FileLimit];
             bytes.AsSpan().Fill((byte)' ');
             SessionCodec.Write(Document("ldc.i4.s 42")).CopyTo(bytes, 0);
             await File.WriteAllBytesAsync(path, bytes, TestContext.CancellationToken);
-            var store = new SessionFileStore(Path.Combine(directory, "cache"));
+            var store = new SessionFileStore(Path.Join(directory, "cache"));
             Assert.AreSequenceEqual(["ldc.i4.s 42"], (await store.ReadAsync(path, TestContext.CancellationToken)).Editor.Lines);
 
             await using (var output = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.None))
@@ -693,11 +693,11 @@ public sealed class SessionFileStoreTests
         var directory = Directory.CreateTempSubdirectory("ilrepl-store-read-cancel-").FullName;
         try
         {
-            var path = Path.Combine(directory, "example.ilrepl.json");
+            var path = Path.Join(directory, "example.ilrepl.json");
             var source = new string('x', 1024 * 1024) + " λ日本";
             var bytes = SessionCodec.Write(Document(source));
             await File.WriteAllBytesAsync(path, bytes, TestContext.CancellationToken);
-            var store = new SessionFileStore(Path.Combine(directory, "cache"));
+            var store = new SessionFileStore(Path.Join(directory, "cache"));
             using var canceled = new CancellationTokenSource();
             await canceled.CancelAsync();
 
@@ -705,7 +705,7 @@ public sealed class SessionFileStoreTests
 
             Assert.AreSequenceEqual(bytes, await File.ReadAllBytesAsync(path, TestContext.CancellationToken));
             Assert.AreSequenceEqual([source], (await store.ReadAsync(path, TestContext.CancellationToken)).Editor.Lines);
-            Assert.IsFalse(Directory.Exists(Path.Combine(directory, "cache")));
+            Assert.IsFalse(Directory.Exists(Path.Join(directory, "cache")));
             Assert.HasCount(1, Directory.GetFiles(directory));
         }
         finally
@@ -723,17 +723,17 @@ public sealed class SessionFileStoreTests
         var directory = Directory.CreateTempSubdirectory("ilrepl-store-external-").FullName;
         try
         {
-            var sourceDirectory = Directory.CreateDirectory(Path.Combine(directory, "outside")).FullName;
-            var project = Path.Combine(sourceDirectory, "example.csproj");
-            var source = Path.Combine(sourceDirectory, "example.dll");
+            var sourceDirectory = Directory.CreateDirectory(Path.Join(directory, "outside")).FullName;
+            var project = Path.Join(sourceDirectory, "example.csproj");
+            var source = Path.Join(sourceDirectory, "example.dll");
             byte[] image = [1, 2, 3];
             await File.WriteAllTextAsync(project, "<Project />", TestContext.CancellationToken);
             await File.WriteAllBytesAsync(source, image, TestContext.CancellationToken);
             var document = Referencing(source, image);
             document = document with { References = [document.References[0] with { Origin = "project", Request = project }] };
-            var store = new SessionFileStore(Path.Combine(directory, "cache"));
-            var first = Path.Combine(directory, "first", "example.ilrepl.json");
-            var second = Path.Combine(directory, "second", "example.ilrepl.json");
+            var store = new SessionFileStore(Path.Join(directory, "cache"));
+            var first = Path.Join(directory, "first", "example.ilrepl.json");
+            var second = Path.Join(directory, "second", "example.ilrepl.json");
             await store.WriteAsync(first, document, false, TestContext.CancellationToken);
             var opened = await store.ReadAsync(first, TestContext.CancellationToken);
             Assert.AreEqual(project, opened.References.Single().Request);
@@ -750,9 +750,9 @@ public sealed class SessionFileStoreTests
                 Assert.AreEqual(project, (await store.ReadAsync(path, TestContext.CancellationToken)).References.Single().Request);
             }
 
-            var elsewhere = new SessionFileStore(Path.Combine(directory, "empty-cache"));
+            var elsewhere = new SessionFileStore(Path.Join(directory, "empty-cache"));
             var portable = await elsewhere.ReadAsync(second, TestContext.CancellationToken);
-            Assert.AreEqual(Path.Combine(Path.GetDirectoryName(second)!, "example.csproj"), portable.References.Single().Request);
+            Assert.AreEqual(Path.Join(Path.GetDirectoryName(second)!, "example.csproj"), portable.References.Single().Request);
             Assert.IsEmpty(portable.Assets);
             Assert.AreSequenceEqual(document.Editor.Lines, portable.Editor.Lines);
         }
@@ -771,29 +771,29 @@ public sealed class SessionFileStoreTests
         var directory = Directory.CreateTempSubdirectory("ilrepl-store-moved-").FullName;
         try
         {
-            var repository = Directory.CreateDirectory(Path.Combine(directory, "repository")).FullName;
-            Directory.CreateDirectory(Path.Combine(repository, ".git"));
-            var sourceDirectory = Directory.CreateDirectory(Path.Combine(repository, "source")).FullName;
-            var project = Path.Combine(sourceDirectory, "example.csproj");
-            var source = Path.Combine(sourceDirectory, "example.dll");
+            var repository = Directory.CreateDirectory(Path.Join(directory, "repository")).FullName;
+            Directory.CreateDirectory(Path.Join(repository, ".git"));
+            var sourceDirectory = Directory.CreateDirectory(Path.Join(repository, "source")).FullName;
+            var project = Path.Join(sourceDirectory, "example.csproj");
+            var source = Path.Join(sourceDirectory, "example.dll");
             byte[] image = [1, 2, 3];
             await File.WriteAllTextAsync(project, "<Project />", TestContext.CancellationToken);
             await File.WriteAllBytesAsync(source, image, TestContext.CancellationToken);
             var document = Referencing(source, image);
             document = document with { References = [document.References[0] with { Origin = "project", Request = project }] };
-            var path = Path.Combine(repository, "sessions", "example.ilrepl.json");
-            var store = new SessionFileStore(Path.Combine(directory, "cache"));
+            var path = Path.Join(repository, "sessions", "example.ilrepl.json");
+            var store = new SessionFileStore(Path.Join(directory, "cache"));
             await store.WriteAsync(path, document, false, TestContext.CancellationToken);
             var saved = SessionCodec.Read(await File.ReadAllBytesAsync(path, TestContext.CancellationToken));
             Assert.AreEqual("../source/example.csproj", saved.References.Single().Request);
             Assert.AreEqual("../source/example.dll", saved.References.Single().Assets.Single().Path);
-            var moved = Path.Combine(directory, "moved");
+            var moved = Path.Join(directory, "moved");
             Directory.Move(repository, moved);
 
-            var opened = await store.ReadAsync(Path.Combine(moved, "sessions", "example.ilrepl.json"), TestContext.CancellationToken);
+            var opened = await store.ReadAsync(Path.Join(moved, "sessions", "example.ilrepl.json"), TestContext.CancellationToken);
 
-            Assert.AreEqual(Path.Combine(moved, "source", "example.csproj"), opened.References.Single().Request);
-            Assert.AreEqual(Path.Combine(moved, "source", "example.dll"), opened.References.Single().Assets.Single().Path);
+            Assert.AreEqual(Path.Join(moved, "source", "example.csproj"), opened.References.Single().Request);
+            Assert.AreEqual(Path.Join(moved, "source", "example.dll"), opened.References.Single().Assets.Single().Path);
             Assert.AreSequenceEqual(image, opened.Assets.Single().Image);
         }
         finally
@@ -828,9 +828,9 @@ public sealed class SessionFileStoreTests
                     }],
             };
 
-            var store = new SessionFileStore(Path.Combine(directory, "cache"));
+            var store = new SessionFileStore(Path.Join(directory, "cache"));
             await Assert.ThrowsExactlyAsync<InvalidDataException>(() =>
-                store.WriteAsync(Path.Combine(directory, "invalid.ilrepl.json"), document, false, TestContext.CancellationToken));
+                store.WriteAsync(Path.Join(directory, "invalid.ilrepl.json"), document, false, TestContext.CancellationToken));
             Assert.IsEmpty(Directory.EnumerateFileSystemEntries(directory));
         }
         finally

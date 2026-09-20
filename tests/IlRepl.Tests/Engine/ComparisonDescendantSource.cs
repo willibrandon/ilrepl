@@ -22,13 +22,13 @@ public static partial class ComparisonDescendantSource
     /// <returns>The normal result, or a distinct value if the previous side left a live descendant.</returns>
     public static int Run(string executable, string records, bool grandchild, string mode, bool escape)
     {
-        var record = Path.Combine(records, "processes");
+        var record = Path.Join(records, "processes");
         if (File.Exists(record) && File.ReadAllLines(record).Any(IsRunning))
         {
             return -1;
         }
 
-        var ready = Path.Combine(records, Guid.NewGuid().ToString("N"));
+        var ready = Path.Join(records, Guid.NewGuid().ToString("N"));
         using var process = Start(executable, record, ready, grandchild, escape);
         var wait = Stopwatch.StartNew();
         while (!File.Exists(ready))

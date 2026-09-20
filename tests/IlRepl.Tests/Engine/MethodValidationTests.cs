@@ -98,7 +98,7 @@ public sealed class MethodValidationTests
     [TestMethod]
     public void AddLine_MethodClose_NeverRunsTheBody()
     {
-        var marker = Path.Combine(Path.GetTempPath(), "ilrepl-test-" + Guid.NewGuid().ToString("N"));
+        var marker = Path.Join(Path.GetTempPath(), "ilrepl-test-" + Guid.NewGuid().ToString("N"));
         try
         {
             var session = Load(

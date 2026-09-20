@@ -29,8 +29,8 @@ internal sealed class SampleFixture
 
     private static async Task<string> BuildAsync(string project, string assemblyFileName)
     {
-        var projectDirectory = Path.Combine(RepoPaths.Root, "samples", project);
-        var output = Path.Combine(projectDirectory, "bin", RepoPaths.Configuration, "net10.0", assemblyFileName);
+        var projectDirectory = Path.Join(RepoPaths.Root, "samples", project);
+        var output = Path.Join(projectDirectory, "bin", RepoPaths.Configuration, "net10.0", assemblyFileName);
         if (File.Exists(output))
         {
             return output;

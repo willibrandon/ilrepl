@@ -26,7 +26,7 @@ public sealed partial class SiblingTypeLookupTests
             return;
         }
 
-        directory = Path.Combine(Path.GetTempPath(), "sibling-probe-" + Guid.NewGuid().ToString("N"));
+        directory = Path.Join(Path.GetTempPath(), "sibling-probe-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         try
         {

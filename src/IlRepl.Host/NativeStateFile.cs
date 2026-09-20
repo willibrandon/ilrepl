@@ -61,7 +61,7 @@ public static class NativeStateFile
     /// <returns>A task completing after atomic publication.</returns>
     public static async Task WriteAsync(string root, NativeWorkerState state)
     {
-        var path = Path.Combine(root, "state.json");
+        var path = Path.Join(root, "state.json");
         await File.WriteAllTextAsync(path + ".tmp", JsonSerializer.Serialize(state,
             ProtocolJsonContext.Default.NativeWorkerState)).ConfigureAwait(false);
         // MoveFileEx cannot overwrite an open destination on Windows, even when the reader shares deletion.

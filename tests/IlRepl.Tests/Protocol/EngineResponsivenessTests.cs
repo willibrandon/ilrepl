@@ -280,7 +280,7 @@ public sealed class EngineResponsivenessTests
     public async Task DeferredModuleInitializer_StaysPassiveUntilUserPhase()
     {
         var directory = Directory.CreateTempSubdirectory("ilrepl-phase-").FullName;
-        var marker = Path.Combine(directory, "initialized.txt");
+        var marker = Path.Join(directory, "initialized.txt");
         try
         {
             var session = new Session { DeferActivation = true };

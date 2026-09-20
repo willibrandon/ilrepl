@@ -27,7 +27,7 @@ internal static class SocketDirectory
             root = "/tmp";
         }
 
-        var path = Path.Combine(root, name);
+        var path = Path.Join(root, name);
         Directory.CreateDirectory(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
         return path;
     }
@@ -58,7 +58,7 @@ internal static class SocketDirectory
             temporary,
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Temp"),
+            Path.Join(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Temp"),
         ];
         Exception? failure = null;
         foreach (var root in roots.Distinct(StringComparer.OrdinalIgnoreCase))
@@ -68,9 +68,9 @@ internal static class SocketDirectory
                 continue;
             }
 
-            var path = Path.Combine(root, name);
+            var path = Path.Join(root, name);
             // Windows AF_UNIX uses UTF-8 and reserves one of its 108 address bytes for the terminator.
-            if (Encoding.UTF8.GetByteCount(Path.Combine(path, "host.sock")) > 107)
+            if (Encoding.UTF8.GetByteCount(Path.Join(path, "host.sock")) > 107)
             {
                 continue;
             }

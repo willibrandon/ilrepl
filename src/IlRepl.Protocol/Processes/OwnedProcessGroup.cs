@@ -328,7 +328,7 @@ public sealed partial class OwnedProcessGroup : IDisposable
 
             try
             {
-                var status = File.ReadAllText(Path.Combine(directory, "stat"));
+                var status = File.ReadAllText(Path.Join(directory, "stat"));
                 var closing = status.LastIndexOf(')');
                 if (closing < 0 || closing + 2 >= status.Length)
                 {

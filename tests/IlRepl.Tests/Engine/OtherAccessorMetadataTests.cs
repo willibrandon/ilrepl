@@ -55,7 +55,7 @@ public sealed class OtherAccessorMetadataTests
             var context = new AssemblyLoadContext("other-accessors-" + Guid.NewGuid(), isCollectible: true);
             try
             {
-                var saved = context.LoadFromStream(new MemoryStream(exported));
+                var saved = context.LoadImage(exported);
                 AssertRuntime(saved.GetType(edit.Method.DeclaringType!.FullName!)!, eventMember, standard, extra, privateAccessor, 43);
             }
             finally

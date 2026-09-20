@@ -103,7 +103,7 @@ public sealed class SessionCliTests
     {
         using var files = new SessionWorkspaceFixture();
         await files.WriteAsync(null, TestContext.CancellationToken);
-        var script = Path.Combine(files.DirectoryPath, "script.il");
+        var script = Path.Join(files.DirectoryPath, "script.il");
         await File.WriteAllTextAsync(script, "ldc.i4.1\nret", TestContext.CancellationToken);
         string[] arguments = combination switch
         {
@@ -174,7 +174,7 @@ public sealed class SessionCliTests
     public async Task SessionSuffix_DispatchesSaveAndLoadAliases()
     {
         using var files = new SessionWorkspaceFixture();
-        var path = Path.Combine(files.DirectoryPath, "aliases.ILREPL.JSON");
+        var path = Path.Join(files.DirectoryPath, "aliases.ILREPL.JSON");
         var saved = await RunAsync(["--eval", $".method int32 Value() {{; ldc.i4.7; ret; }}; .save \"{path}\""]);
 
         Assert.AreEqual(0, saved.Code, saved.StdOut + saved.StdErr);

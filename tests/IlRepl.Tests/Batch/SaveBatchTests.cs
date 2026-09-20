@@ -30,7 +30,7 @@ public sealed class SaveBatchTests
         using var files = new SessionWorkspaceFixture();
         await using var engine = await SessionWorkspaceFixture.StartAsync(token);
         using var output = new StringWriter();
-        var destination = Path.Combine(files.DirectoryPath, session ? "retained.ilrepl.json" : "retained.dll");
+        var destination = Path.Join(files.DirectoryPath, session ? "retained.ilrepl.json" : "retained.dll");
         var runner = new BatchRunner(engine, output, color: false, echoInput: false);
         var code = await runner.RunAsync([
             "ldstr " + LiteralParser.Escape(files.MarkerPath), "ldstr \"unexpected execution\"",

@@ -92,7 +92,7 @@ public sealed partial class ActivationEditTests
             var context = new AssemblyLoadContext("file-activation", isCollectible: true);
             try
             {
-                var saved = context.LoadFromStream(new MemoryStream(image));
+                var saved = context.LoadImage(image);
                 Assert.AreEqual(43, saved.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
             }
             finally

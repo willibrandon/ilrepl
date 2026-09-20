@@ -258,7 +258,7 @@ internal sealed class ReferenceLoadContext : AssemblyLoadContext
 
                 foreach (var directory in _paths.Values.Select(Path.GetDirectoryName).Distinct().ToArray())
                 {
-                    var candidate = Path.Combine(directory!, assemblyName.CultureName ?? "", assemblyName.Name + ".dll");
+                    var candidate = Path.Join(directory!, assemblyName.CultureName ?? "", assemblyName.Name + ".dll");
                     if (File.Exists(candidate))
                     {
                         var bytes = File.ReadAllBytes(candidate);
@@ -302,7 +302,8 @@ internal sealed class ReferenceLoadContext : AssemblyLoadContext
                 }
             }
 
-            return LoadFromStream(new MemoryStream(image, writable: false));
+            using var stream = new MemoryStream(image, writable: false);
+            return LoadFromStream(stream);
         }
     }
 
@@ -339,7 +340,7 @@ internal sealed class ReferenceLoadContext : AssemblyLoadContext
                     "lib" + unmanagedDllName + ".dylib",
                 })
                 {
-                    var candidate = Path.Combine(directory!, name);
+                    var candidate = Path.Join(directory!, name);
                     if (File.Exists(candidate))
                     {
                         return LoadUnmanagedDllFromPath(candidate);

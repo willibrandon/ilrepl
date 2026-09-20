@@ -188,8 +188,8 @@ public sealed class MethodEditingProcessTests
     public async Task Rpc_ResetDuringComparisonRejectsStaleReport()
     {
         var directory = Directory.CreateTempSubdirectory("ilrepl-comparison-reset-");
-        var ready = Path.Combine(directory.FullName, "started");
-        var release = Path.Combine(directory.FullName, "release");
+        var ready = Path.Join(directory.FullName, "started");
+        var release = Path.Join(directory.FullName, "release");
         try
         {
             var token = TestContext.CancellationToken;

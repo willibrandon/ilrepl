@@ -118,7 +118,8 @@ public sealed class PrivateVarArgEditTests
         il.Emit(OpCodes.Call, call);
         il.Emit(OpCodes.Ret);
         var image = writer.Write();
-        using var module = ModuleDefinition.ReadModule(new MemoryStream(image));
+        using var moduleStream = new MemoryStream(image);
+        using var module = ModuleDefinition.ReadModule(moduleStream);
         var exportedCall = (MethodReference)module.GetType("N.Caller").Methods.Single(method => method.Name == "Scenario")
             .Body.Instructions.Single(instruction => instruction.OpCode == OpCodes.Call).Operand;
         Assert.AreEqual(MethodCallingConvention.VarArg, exportedCall.CallingConvention);
@@ -130,7 +131,7 @@ public sealed class PrivateVarArgEditTests
         var context = new AssemblyLoadContext("private-vararg-export-" + Guid.NewGuid(), isCollectible: true);
         try
         {
-            var assembly = context.LoadFromStream(new MemoryStream(image));
+            var assembly = context.LoadImage(image);
             Assert.AreEqual(42, assembly.GetType("N.Caller")!.GetMethod("Read")!.Invoke(null, null));
             if (OperatingSystem.IsWindows())
             {
@@ -179,7 +180,7 @@ public sealed class PrivateVarArgEditTests
             var context = new AssemblyLoadContext("private-vararg-" + Guid.NewGuid(), isCollectible: true);
             try
             {
-                var assembly = context.LoadFromStream(new MemoryStream(image));
+                var assembly = context.LoadImage(image);
                 Assert.AreEqual(44, assembly.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
             }
             finally

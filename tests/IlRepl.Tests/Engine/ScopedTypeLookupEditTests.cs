@@ -47,7 +47,7 @@ public sealed class ScopedTypeLookupEditTests
             var context = new AssemblyLoadContext("direct-lookups", isCollectible: true);
             try
             {
-                var assembly = context.LoadFromStream(new MemoryStream(image));
+                var assembly = context.LoadImage(image);
                 Assert.IsTrue((bool)assembly.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null)!);
             }
             finally
@@ -83,7 +83,7 @@ public sealed class ScopedTypeLookupEditTests
             var context = new AssemblyLoadContext("tail-lookups", isCollectible: true);
             try
             {
-                var assembly = context.LoadFromStream(new MemoryStream(image));
+                var assembly = context.LoadImage(image);
                 Assert.AreEqual(assembly.GetType(edit.Method.DeclaringType!.FullName!),
                     assembly.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
             }
@@ -142,7 +142,7 @@ public sealed class ScopedTypeLookupEditTests
             var context = new AssemblyLoadContext("scoped-lookups", isCollectible: true);
             try
             {
-                var assembly = context.LoadFromStream(new MemoryStream(image));
+                var assembly = context.LoadImage(image);
                 Assert.IsFalse((bool)assembly.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null)!);
                 Assert.DoesNotContain(reference => reference.Name == "IlRepl.Engine", assembly.GetReferencedAssemblies());
             }

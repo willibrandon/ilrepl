@@ -106,7 +106,8 @@ public sealed class ModuleIdentityComparisonTests
 
     private static Guid Mvid(byte[] image)
     {
-        using var module = ModuleDefinition.ReadModule(new MemoryStream(image));
+        using var moduleStream = new MemoryStream(image);
+        using var module = ModuleDefinition.ReadModule(moduleStream);
         return module.Mvid;
     }
 }

@@ -68,7 +68,8 @@ public sealed class EventModifierTests
         }
 
         Assert.AreNotSame(previous, session.Types.Single(type => type.FullName == "Events").RuntimeType);
-        using var exported = AssemblyDefinition.ReadAssembly(new MemoryStream(AssemblyExporter.Write(session, "event-replaced")));
+        using var exportedStream = new MemoryStream(AssemblyExporter.Write(session, "event-replaced"));
+        using var exported = AssemblyDefinition.ReadAssembly(exportedStream);
         var handler = (OptionalModifierType)exported.MainModule.GetType("Events").Events.Single().EventType;
         Assert.AreSame(exported.MainModule.GetType("Marker"), handler.ModifierType.Resolve());
         _ = IlasmLocator.Assemble(session.ToIlAsm());
@@ -115,7 +116,8 @@ public sealed class EventModifierTests
 
     private static void AssertModifiers(byte[] image)
     {
-        using var assembly = AssemblyDefinition.ReadAssembly(new MemoryStream(image));
+        using var assemblyStream = new MemoryStream(image);
+        using var assembly = AssemblyDefinition.ReadAssembly(assemblyStream);
         var outer = (RequiredModifierType)assembly.MainModule.GetType("Events").Events.Single().EventType;
         Assert.AreEqual("IsVolatile", outer.ModifierType.Name);
         var middle = (OptionalModifierType)outer.ElementType;

@@ -30,7 +30,7 @@ public sealed class HostInteractionTests
     {
         var token = TestContext.CancellationToken;
         using var files = new SessionWorkspaceFixture();
-        var release = Path.Combine(files.DirectoryPath, "release");
+        var release = Path.Join(files.DirectoryPath, "release");
         await using var controller = await SessionWorkspaceFixture.StartAsync(token);
         string[] source =
         [

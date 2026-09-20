@@ -149,7 +149,7 @@ public sealed class ArrayReferenceTests
             var context = new AssemblyLoadContext("array-reference-copy", isCollectible: true);
             try
             {
-                var assembly = context.LoadFromStream(new MemoryStream(image));
+                var assembly = context.LoadImage(image);
                 Assert.AreEqual(expected, assembly.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
             }
             finally

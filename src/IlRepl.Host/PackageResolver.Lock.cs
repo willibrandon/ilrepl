@@ -180,12 +180,10 @@ internal static partial class PackageResolver
                 && string.IsNullOrEmpty(target.RuntimeIdentifier));
             var current = restored.Targets.Single(target => target.TargetFramework == framework && target.RuntimeIdentifier == runtime);
             var portableIds = original.Dependencies.Select(dependency => dependency.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
-            foreach (var dependency in portable.Dependencies.Where(dependency => !portableIds.Contains(dependency.Id)))
+            foreach (var dependency in portable.Dependencies.Where(dependency => !portableIds.Contains(dependency.Id))
+                .Where(dependency => !current.Dependencies.Any(item => item.Id.Equals(dependency.Id, StringComparison.OrdinalIgnoreCase))))
             {
-                if (!current.Dependencies.Any(item => item.Id.Equals(dependency.Id, StringComparison.OrdinalIgnoreCase)))
-                {
-                    current.Dependencies.Add(dependency);
-                }
+                current.Dependencies.Add(dependency);
             }
 
             restored.Targets.Remove(portable);

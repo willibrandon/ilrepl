@@ -60,7 +60,8 @@ public sealed class ArrayAddressHelpTests
         {
             using var oracle = new IlVerificationOracle();
             Assert.IsEmpty(oracle.Verify(image));
-            using var assembly = AssemblyDefinition.ReadAssembly(new MemoryStream(image));
+            using var assemblyStream = new MemoryStream(image);
+            using var assembly = AssemblyDefinition.ReadAssembly(assemblyStream);
             var body = assembly.MainModule.GetType("ArrayReader").Methods.Single(candidate => candidate.Name == "Read").Body;
             var call = body.Instructions.Single(instruction => instruction.OpCode == (virtualCall ? OpCodes.Callvirt : OpCodes.Call));
             var target = Assert.IsInstanceOfType<MethodReference>(call.Operand);
@@ -73,7 +74,7 @@ public sealed class ArrayAddressHelpTests
             var context = new AssemblyLoadContext("array-address", isCollectible: true);
             try
             {
-                var loaded = context.LoadFromStream(new MemoryStream(image));
+                var loaded = context.LoadImage(image);
                 Assert.AreEqual(42, loaded.GetType("ArrayReader")!.GetMethod("Read")!.Invoke(null, [new[,] { { 7, 42 } }]));
             }
             finally

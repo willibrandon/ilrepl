@@ -338,12 +338,9 @@ public sealed class AssemblyTypeIndex
     public IEnumerable<TypeDefinitionHandle> VisibleNamed(string name)
     {
         ArgumentNullException.ThrowIfNull(name);
-        foreach (var handle in Named(name))
+        foreach (var handle in Named(name).Where(handle => EntryOf(handle) is { IsVisible: true }))
         {
-            if (EntryOf(handle) is { IsVisible: true })
-            {
-                yield return handle;
-            }
+            yield return handle;
         }
     }
 

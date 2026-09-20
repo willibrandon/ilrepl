@@ -117,7 +117,7 @@ public sealed class ConsoleStartupTests
         await auto.WaitUntilTextAsync(draft + " unchanged after λ");
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: token);
         await auto.WaitUntilTextAsync("console-mode-restored");
-        Assert.AreEqual(draft + " unchanged after λ", await File.ReadAllTextAsync(Path.Combine(files.DirectoryPath, "draft.txt"), token));
+        Assert.AreEqual(draft + " unchanged after λ", await File.ReadAllTextAsync(Path.Join(files.DirectoryPath, "draft.txt"), token));
         await auto.TypeAsync("restored λ", ct: token);
         await auto.EnterAsync(ct: token);
         await AssertCookedLineAsync(auto, files, run, token);
@@ -244,13 +244,13 @@ public sealed class ConsoleStartupTests
         Task<int> run,
         CancellationToken token)
     {
-        var path = Path.Combine(files.DirectoryPath, "cooked-line.txt");
+        var path = Path.Join(files.DirectoryPath, "cooked-line.txt");
         try
         {
             await auto.WaitUntilTextAsync("cooked-line:restored λ");
             Assert.AreEqual("restored λ", await File.ReadAllTextAsync(path, token));
             Assert.IsFalse(run.IsCompleted, "The probe must remain alive until its final output has been observed.");
-            await File.WriteAllTextAsync(Path.Combine(files.DirectoryPath, "cooked-line.observed"), "observed", token);
+            await File.WriteAllTextAsync(Path.Join(files.DirectoryPath, "cooked-line.observed"), "observed", token);
             Assert.AreEqual(0, await run.WaitAsync(token));
         }
         finally

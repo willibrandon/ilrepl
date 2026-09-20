@@ -23,7 +23,7 @@ public sealed class NativeCliTests
     public async Task Inspect_LongTemporaryDirectoryUsesWorkingDiagnosticEndpoint()
     {
         using var files = new SessionWorkspaceFixture();
-        var temporary = Path.Combine(files.DirectoryPath, new string('a', 55), new string('b', 55));
+        var temporary = Path.Join(files.DirectoryPath, new string('a', 55), new string('b', 55));
         Directory.CreateDirectory(temporary);
         Assert.IsGreaterThan(104, temporary.Length);
         var start = new ProcessStartInfo

@@ -25,11 +25,11 @@ public sealed class ComparisonFixtureTests
         var fixture = Directory.CreateTempSubdirectory("ilrepl-fixture-tree-");
         try
         {
-            Directory.CreateDirectory(Path.Combine(fixture.FullName, "empty"));
-            File.WriteAllText(Path.Combine(fixture.FullName, "data.txt"), "seed");
-            File.CreateSymbolicLink(Path.Combine(fixture.FullName, "alias.txt"), "data.txt");
-            Directory.CreateSymbolicLink(Path.Combine(fixture.FullName, "alias-dir"), "empty");
-            Directory.CreateSymbolicLink(Path.Combine(fixture.FullName, "alias-root"), ".");
+            Directory.CreateDirectory(Path.Join(fixture.FullName, "empty"));
+            File.WriteAllText(Path.Join(fixture.FullName, "data.txt"), "seed");
+            File.CreateSymbolicLink(Path.Join(fixture.FullName, "alias.txt"), "data.txt");
+            Directory.CreateSymbolicLink(Path.Join(fixture.FullName, "alias-dir"), "empty");
+            Directory.CreateSymbolicLink(Path.Join(fixture.FullName, "alias-root"), ".");
             var session = IlLines.Load(".method bool Read() {",
                 "ldstr \"alias-root/data.txt\"", "call string File::ReadAllText(string)", "call void Console::Write(string)",
                 "ldstr \"alias.txt\"", "ldstr \"worker\"", "call void File::WriteAllText(string, string)",
@@ -52,9 +52,9 @@ public sealed class ComparisonFixtureTests
                 Assert.HasCount(1, side.Invocations);
             }
 
-            Assert.AreEqual("seed", File.ReadAllText(Path.Combine(fixture.FullName, "data.txt")));
-            Assert.IsEmpty(Directory.EnumerateFileSystemEntries(Path.Combine(fixture.FullName, "empty")));
-            Assert.AreEqual("data.txt", new FileInfo(Path.Combine(fixture.FullName, "alias.txt")).LinkTarget);
+            Assert.AreEqual("seed", File.ReadAllText(Path.Join(fixture.FullName, "data.txt")));
+            Assert.IsEmpty(Directory.EnumerateFileSystemEntries(Path.Join(fixture.FullName, "empty")));
+            Assert.AreEqual("data.txt", new FileInfo(Path.Join(fixture.FullName, "alias.txt")).LinkTarget);
         }
         finally
         {
@@ -71,7 +71,7 @@ public sealed class ComparisonFixtureTests
         var fixture = Directory.CreateTempSubdirectory("ilrepl-fixture-external-");
         try
         {
-            var link = Path.Combine(fixture.FullName, "shared");
+            var link = Path.Join(fixture.FullName, "shared");
             Directory.CreateSymbolicLink(link, fixture.Parent!.FullName);
             var session = IlLines.Load(".method int32 Value() { ldc.i4.s 42; ret }");
             var edit = session.PrepareEdit("Value", "Copy");

@@ -119,7 +119,7 @@ public sealed class ProcessDisposalTests
     {
         // The endpoints are created under TMPDIR, so the child that runs the assertions starts with a directory of its own there.
         var directory = Environment.GetEnvironmentVariable(CleanupDirectory)
-            ?? Path.Combine("/tmp", "ilr-dispose-" + Guid.NewGuid().ToString("N")[..8]);
+            ?? Path.Join("/tmp", "ilr-dispose-" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(directory);
         if (await IsolatedTestProcess.RunAsync(TestContext,
             new Dictionary<string, string> { ["TMPDIR"] = directory, [CleanupDirectory] = directory }))
@@ -182,7 +182,7 @@ public sealed class ProcessDisposalTests
             }
 
             Task DisposeTarget() => failedEngine is null ? lifetime.DisposeAsync().AsTask() : failedEngine.DisposeAsync().AsTask();
-            var blocker = Path.Combine(endpoint, "prevent-directory-removal");
+            var blocker = Path.Join(endpoint, "prevent-directory-removal");
             await File.WriteAllTextAsync(blocker, "owned test file", token);
             var first = DisposeTarget();
             var second = DisposeTarget();

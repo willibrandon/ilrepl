@@ -28,12 +28,10 @@ public static class CatalogCompleter
 
         var commands = word.StartsWith('.');
         var matches = new List<CompletionItem>();
-        foreach (var item in catalog)
+        foreach (var item in catalog
+            .Where(item => item.Name.StartsWith('.') == commands && item.Name.StartsWith(word, StringComparison.Ordinal)))
         {
-            if (item.Name.StartsWith('.') == commands && item.Name.StartsWith(word, StringComparison.Ordinal))
-            {
-                matches.Add(item);
-            }
+            matches.Add(item);
         }
 
         return matches;

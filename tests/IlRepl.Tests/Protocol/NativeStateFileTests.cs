@@ -23,7 +23,7 @@ public sealed class NativeStateFileTests
     public async Task Write_OpenReaderAllowsAtomicReplacementAndRetainsOldSnapshot()
     {
         using var files = new SessionWorkspaceFixture();
-        var path = Path.Combine(files.DirectoryPath, "state.json");
+        var path = Path.Join(files.DirectoryPath, "state.json");
         await NativeStateFile.WriteAsync(files.DirectoryPath, new NativeWorkerState
         {
             MethodId = 11, Report = new NativeReport { Name = "before", Invocations = 1 },

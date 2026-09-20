@@ -61,7 +61,7 @@ public sealed class SafeArrayDependencyTests
             var context = new AssemblyLoadContext("safe-array-export", isCollectible: true);
             try
             {
-                var assembly = context.LoadFromStream(new MemoryStream(image));
+                var assembly = context.LoadImage(image);
                 Assert.AreEqual(43, assembly.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
                 AssertSubtype(assembly.GetType(edit.Method.DeclaringType!.FullName!)!, target, generic);
             }

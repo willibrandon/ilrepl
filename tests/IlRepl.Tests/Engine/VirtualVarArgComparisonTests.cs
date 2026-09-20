@@ -65,7 +65,8 @@ public sealed class VirtualVarArgComparisonTests
         il.Emit(OpCodes.Callvirt, reference);
         il.Emit(OpCodes.Ret);
         ComparisonInstrumentation.Complete(writer, selected, entry);
-        using var module = ModuleDefinition.ReadModule(new MemoryStream(writer.Write()));
+        using var moduleStream = new MemoryStream(writer.Write());
+        using var module = ModuleDefinition.ReadModule(moduleStream);
         var adapter = module.GetTypes().SelectMany(type => type.Methods)
             .Single(method => method.Name.EndsWith(constrained ? "_constrained" : "_virtual", StringComparison.Ordinal));
         var pointers = adapter.Body.Instructions.Where(instruction => instruction.OpCode.Code is Code.Ldftn or Code.Ldvirtftn)

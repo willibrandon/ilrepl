@@ -65,8 +65,9 @@ public sealed class ExternalVarArgScenarioTests
         }
 
         var package = ComparisonCapture.Create(session, "Copy using Scenario");
-        using (var module = ModuleDefinition.ReadModule(new MemoryStream(package.Original.Image)))
+        using (var original = new MemoryStream(package.Original.Image))
         {
+            using var module = ModuleDefinition.ReadModule(original);
             var calls = module.GetTypes().SelectMany(type => type.Methods).Where(method => method.HasBody)
                 .SelectMany(method => method.Body.Instructions).Select(instruction => instruction.Operand).OfType<MethodReference>();
             Assert.Contains(method => method.Name == "Read" && method.DeclaringType.Scope.Name == assembly.GetName().Name

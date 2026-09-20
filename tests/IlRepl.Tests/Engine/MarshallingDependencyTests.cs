@@ -59,7 +59,7 @@ public sealed class MarshallingDependencyTests
             var context = new AssemblyLoadContext("marshalling-export", isCollectible: true);
             try
             {
-                var exported = context.LoadFromStream(new MemoryStream(exportedImage));
+                var exported = context.LoadImage(exportedImage);
                 Assert.AreEqual(43, exported.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
                 var owner = exported.GetType(edit.Method.DeclaringType!.FullName!)!;
                 var method = owner.GetMethod("Read")!;

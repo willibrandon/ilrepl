@@ -58,7 +58,7 @@ public sealed class ReflectionEnumerationTests
             var context = new AssemblyLoadContext("enumeration-export", isCollectible: true);
             try
             {
-                var assembly = context.LoadFromStream(new MemoryStream(image));
+                var assembly = context.LoadImage(image);
                 Assert.AreEqual(3, assembly.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
                 var owner = assembly.GetType(generic ? "IlRepl.Edits.Copy.Owner`1" : "IlRepl.Edits.Copy.Owner")!;
                 AssertMembers(owner);

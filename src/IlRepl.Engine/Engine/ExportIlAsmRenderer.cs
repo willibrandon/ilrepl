@@ -56,7 +56,8 @@ internal sealed partial class ExportIlAsmRenderer
         var bytes = draft is null ? AssemblyExporter.Write(session, "ilrepl_cell") : AssemblyExporter.WriteDeclarations(session);
         using var stream = new MemoryStream(bytes, writable: false);
         using var pe = new PEReader(stream);
-        using var module = ModuleDefinition.ReadModule(new MemoryStream(bytes, writable: false));
+        using var definitions = new MemoryStream(bytes, writable: false);
+        using var module = ModuleDefinition.ReadModule(definitions);
         var renderer = new ExportIlAsmRenderer(pe, module.Assembly.Name.Name, draft);
         renderer.WriteModule(module);
         return renderer._text.ToString();

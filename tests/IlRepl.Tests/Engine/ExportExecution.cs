@@ -14,7 +14,7 @@ namespace IlRepl.Tests.Engine;
 internal sealed class ExportExecution : IDisposable
 {
     private readonly string _directory = Directory.CreateDirectory(
-        Path.Combine(AppContext.BaseDirectory, "artifacts", "export-conformance", Guid.NewGuid().ToString("N"))).FullName;
+        Path.Join(AppContext.BaseDirectory, "artifacts", "export-conformance", Guid.NewGuid().ToString("N"))).FullName;
     private readonly string _workingDirectory;
     private readonly Dictionary<string, string> _files;
     private bool _failed;
@@ -25,7 +25,7 @@ internal sealed class ExportExecution : IDisposable
     /// <param name="files">Relative paths and their initial text contents.</param>
     internal ExportExecution(IReadOnlyDictionary<string, string>? files = null)
     {
-        _workingDirectory = Path.Combine(_directory, "work");
+        _workingDirectory = Path.Join(_directory, "work");
         _files = files is null ? [] : new Dictionary<string, string>(files);
         var tools = typeof(IlasmLocator).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
             .Where(attribute => attribute.Key is "IlasmPackagePath" or "IldasmPackagePath")
@@ -38,7 +38,7 @@ internal sealed class ExportExecution : IDisposable
     /// </summary>
     /// <param name="name">The fixture-local artifact basename.</param>
     /// <param name="contents">The exact generated artifact contents.</param>
-    internal void Record(string name, byte[] contents) => File.WriteAllBytes(Path.Combine(_directory, name), contents);
+    internal void Record(string name, byte[] contents) => File.WriteAllBytes(Path.Join(_directory, name), contents);
 
     /// <summary>
     /// Runs one artifact in a fresh runtime with all input and compilation settings fixed before startup.
@@ -72,9 +72,9 @@ internal sealed class ExportExecution : IDisposable
     {
         ResetFiles();
         var identity = Guid.NewGuid().ToString("N");
-        var imagePath = Path.Combine(_directory, identity + ".dll");
-        var requestPath = Path.Combine(_directory, identity + ".request.json");
-        var resultPath = Path.Combine(_directory, identity + ".result.json");
+        var imagePath = Path.Join(_directory, identity + ".dll");
+        var requestPath = Path.Join(_directory, identity + ".request.json");
+        var resultPath = Path.Join(_directory, identity + ".result.json");
         var variables = CreateEnvironment(profile, environment);
         var request = new ExportRequest(imagePath, type, method, (arguments ?? []).Select(ExportValue.From).ToArray(),
             (genericArguments ?? []).Select(argument => argument.AssemblyQualifiedName!).ToArray(), culture, uiCulture,
@@ -101,7 +101,7 @@ internal sealed class ExportExecution : IDisposable
         try
         {
             var result = await ToolProcess.RunAsync(start, cancellationToken);
-            await File.WriteAllTextAsync(Path.Combine(_directory, identity + ".tool.json"),
+            await File.WriteAllTextAsync(Path.Join(_directory, identity + ".tool.json"),
                 JsonSerializer.Serialize(result), cancellationToken);
             Assert.AreEqual(0, result.ExitCode, result.StandardOutput + result.StandardError + "\nArtifacts: " + _directory);
             return JsonSerializer.Deserialize(await File.ReadAllTextAsync(resultPath, cancellationToken),
@@ -137,15 +137,15 @@ internal sealed class ExportExecution : IDisposable
             }
         }
 
-        var home = Directory.CreateDirectory(Path.Combine(_directory, "home")).FullName;
-        var temporary = Directory.CreateDirectory(Path.Combine(_directory, "temporary")).FullName;
+        var home = Directory.CreateDirectory(Path.Join(_directory, "home")).FullName;
+        var temporary = Directory.CreateDirectory(Path.Join(_directory, "temporary")).FullName;
         variables["HOME"] = home;
         variables["USERPROFILE"] = home;
         variables["TMPDIR"] = temporary;
         variables["TMP"] = temporary;
         variables["TEMP"] = temporary;
         variables["DOTNET_ROOT"] = Path.GetFullPath(
-            Path.Combine(Path.GetDirectoryName(typeof(object).Assembly.Location)!, "..", "..", ".."));
+            Path.Join(Path.GetDirectoryName(typeof(object).Assembly.Location)!, "..", "..", ".."));
         variables["DOTNET_NOLOGO"] = "1";
         if (overrides is not null)
         {

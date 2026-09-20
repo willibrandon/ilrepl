@@ -25,15 +25,15 @@ internal static class ResponsivenessFixtures
         var identity = $"{Version}:{types}:{membersPerType}";
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(identity));
         var name = "Responsiveness" + Convert.ToHexStringLower(hash.AsSpan(0, 8));
-        var directory = Path.Combine(cache, Version);
+        var directory = Path.Join(cache, Version);
         Directory.CreateDirectory(directory);
-        var manifest = Path.Combine(directory, name + ".sha256");
+        var manifest = Path.Join(directory, name + ".sha256");
         if (File.Exists(manifest))
         {
             var expected = File.ReadAllText(manifest);
             if (expected.Length == 64 && expected.All(char.IsAsciiHexDigit))
             {
-                var cached = Path.Combine(directory, expected + ".dll");
+                var cached = Path.Join(directory, expected + ".dll");
                 if (File.Exists(cached) && SessionCodec.Hash(File.ReadAllBytes(cached)) == expected)
                 {
                     return cached;
@@ -64,7 +64,7 @@ internal static class ResponsivenessFixtures
         assembly.Write(image, new WriterParameters { Timestamp = 0 });
         var content = image.ToArray();
         var contentHash = SessionCodec.Hash(content);
-        var path = Path.Combine(directory, contentHash + ".dll");
+        var path = Path.Join(directory, contentHash + ".dll");
         var temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
         {

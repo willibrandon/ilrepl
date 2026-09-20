@@ -26,7 +26,7 @@ public static class ComparisonCleanupSource
     {
         File.AppendAllText(record, Environment.CurrentDirectory + Environment.NewLine);
         var locked = Directory.CreateDirectory("locked");
-        var path = Path.Combine(locked.FullName, "data.txt");
+        var path = Path.Join(locked.FullName, "data.txt");
         File.WriteAllText(path, "worker data");
         if (OperatingSystem.IsWindows())
         {

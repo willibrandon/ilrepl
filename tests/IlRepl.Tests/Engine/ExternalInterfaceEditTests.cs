@@ -28,7 +28,8 @@ public sealed class ExternalInterfaceEditTests
     public void Edit_InternalExternalMembersPreserveAssemblyAccess(string operation)
     {
         var fixture = ExternalInterfaceFixture.Create(operation, false, false);
-        using var module = ModuleDefinition.ReadModule(new MemoryStream(fixture.Image));
+        using var moduleStream = new MemoryStream(fixture.Image);
+        using var module = ModuleDefinition.ReadModule(moduleStream);
         var parent = module.GetType("ExternalBase");
         parent.Interfaces.Clear();
         foreach (var method in parent.Methods)
@@ -56,7 +57,8 @@ public sealed class ExternalInterfaceEditTests
     public void Edit_ModuleInitializationCopiesTheBaseAndItsInterfaceTogether()
     {
         var fixture = ExternalInterfaceFixture.Create("castclass", true, false);
-        using var module = ModuleDefinition.ReadModule(new MemoryStream(fixture.Image));
+        using var moduleStream = new MemoryStream(fixture.Image);
+        using var module = ModuleDefinition.ReadModule(moduleStream);
         var initialize = new MethodDefinition(".cctor", MethodAttributes.Private | MethodAttributes.Static
             | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName, module.TypeSystem.Void);
         module.Types[0].Methods.Add(initialize);
@@ -80,7 +82,7 @@ public sealed class ExternalInterfaceEditTests
         var context = new AssemblyLoadContext("copied-interface-base", isCollectible: true);
         try
         {
-            var exported = context.LoadFromStream(new MemoryStream(saved));
+            var exported = context.LoadImage(saved);
             Assert.DoesNotContain(reference => reference.Name == fixture.Name, exported.GetReferencedAssemblies());
             Assert.AreEqual(42, exported.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
         }
@@ -156,14 +158,15 @@ public sealed class ExternalInterfaceEditTests
         session.AddLine("call Copy");
         foreach (var image in new[] { AssemblyExporter.Write(session, "external-interfaces"), IlasmLocator.Assemble(session.ToIlAsm()) })
         {
-            using var module = ModuleDefinition.ReadModule(new MemoryStream(image));
+            using var moduleStream = new MemoryStream(image);
+            using var module = ModuleDefinition.ReadModule(moduleStream);
             Assert.DoesNotContain(type => type.IsInterface, module.GetTypes());
             var context = new AssemblyLoadContext("external-interfaces", isCollectible: true);
             context.Resolving += (_, name) => name.Name == fixture.Name
-                ? context.LoadFromStream(new MemoryStream(fixture.Image)) : null;
+                ? context.LoadImage(fixture.Image) : null;
             try
             {
-                var saved = context.LoadFromStream(new MemoryStream(image));
+                var saved = context.LoadImage(image);
                 Assert.AreEqual(expected + 1, saved.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
             }
             finally

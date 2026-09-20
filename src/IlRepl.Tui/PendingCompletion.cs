@@ -6,4 +6,10 @@ namespace IlRepl.Tui;
 /// <param name="Key">The local query identity.</param>
 /// <param name="Cancellation">The request's cancellation source.</param>
 /// <param name="Task">The task whose settlement releases the request.</param>
-internal sealed record PendingCompletion(CompletionRequestKey Key, CancellationTokenSource Cancellation, Task Task);
+internal sealed record PendingCompletion(CompletionRequestKey Key, CancellationTokenSource Cancellation, Task Task) : IDisposable
+{
+    /// <summary>
+    /// Releases the cancellation source once the task has settled.
+    /// </summary>
+    public void Dispose() => Cancellation.Dispose();
+}

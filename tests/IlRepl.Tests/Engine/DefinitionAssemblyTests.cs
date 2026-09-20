@@ -113,7 +113,7 @@ public sealed partial class DefinitionAssemblyTests
         var context = new AssemblyLoadContext("foreign-" + typeName, isCollectible: true);
         try
         {
-            var foreign = context.LoadFromStream(new MemoryStream(image));
+            var foreign = context.LoadImage(image);
             var resolver = new TypeResolver();
             Assert.Contains("not found", Assert.ThrowsExactly<ReplException>(() => resolver.Resolve(typeName, null)).Message);
             Assert.DoesNotContain(foreign, resolver.Assemblies);
@@ -136,7 +136,7 @@ public sealed partial class DefinitionAssemblyTests
         var typeName = "Later" + Guid.NewGuid().ToString("N");
         var resolver = new TypeResolver();
         Assert.Contains("not found", Assert.ThrowsExactly<ReplException>(() => resolver.Resolve(typeName, null)).Message);
-        var loaded = AssemblyLoadContext.Default.LoadFromStream(new MemoryStream(Images.Standalone(typeName)));
+        var loaded = AssemblyLoadContext.Default.LoadImage(Images.Standalone(typeName));
         Assert.AreSame(loaded.GetType(typeName), resolver.Resolve(typeName, null));
         Assert.Contains(loaded, resolver.Assemblies);
     }

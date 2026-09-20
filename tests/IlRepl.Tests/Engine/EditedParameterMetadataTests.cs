@@ -65,7 +65,7 @@ public sealed class EditedParameterMetadataTests
             var context = new AssemblyLoadContext("edited-parameters-" + Guid.NewGuid(), isCollectible: true);
             try
             {
-                var assembly = context.LoadFromStream(new MemoryStream(image));
+                var assembly = context.LoadImage(image);
                 var method = assembly.GetType(edit.Method.DeclaringType!.FullName!)!
                     .GetMethod("Set", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)!;
                 AssertParameter(method.GetParameters().Single(), "renamed", after);
@@ -123,7 +123,7 @@ public sealed class EditedParameterMetadataTests
             var context = new AssemblyLoadContext("parameter-metadata-" + Guid.NewGuid(), isCollectible: true);
             try
             {
-                var exported = context.LoadFromStream(new MemoryStream(image));
+                var exported = context.LoadImage(image);
                 var method = exported.GetType(edit.Method.DeclaringType!.FullName!)!.GetMethod("Read")!;
                 AssertRetainedMetadata(method.GetParameters().Single());
                 Assert.AreEqual(42, exported.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));

@@ -20,7 +20,7 @@ public sealed class EditDocumentationTests
     public async Task Transcript_ReplaysBothRevisionsComparisonsAndOriginalCalls()
     {
         await using var engine = await HostPaths.StartEngineAsync(TestContext.CancellationToken);
-        var path = Path.Combine(RepoPaths.Root, "samples", "Transcripts", "editing-methods.il");
+        var path = Path.Join(RepoPaths.Root, "samples", "Transcripts", "editing-methods.il");
         var comparisons = new List<ComparisonReply>();
         var returns = new List<string>();
         foreach (var line in await File.ReadAllLinesAsync(path, TestContext.CancellationToken))
@@ -63,7 +63,7 @@ public sealed class EditDocumentationTests
     public async Task GenericScenario_RunsIndependentlyWithTheSelectedInstantiation()
     {
         await using var engine = await HostPaths.StartEngineAsync(TestContext.CancellationToken);
-        var path = Path.Combine(RepoPaths.Root, "docs", "src", "content", "docs", "usage", "editing-methods.md");
+        var path = Path.Join(RepoPaths.Root, "docs", "src", "content", "docs", "usage", "editing-methods.md");
         var lines = await File.ReadAllLinesAsync(path, TestContext.CancellationToken);
         var scenario = lines.SkipWhile(line => line != ".class public Choice {").TakeWhile(line => line != "```").ToArray();
         Assert.IsNotEmpty(scenario);
@@ -102,7 +102,7 @@ public sealed class EditDocumentationTests
     public async Task Guide_ReplaysAllFencesAndMatchesDocumentedResults()
     {
         await using var engine = await HostPaths.StartEngineAsync(TestContext.CancellationToken);
-        var path = Path.Combine(RepoPaths.Root, "docs", "src", "content", "docs", "usage", "editing-methods.md");
+        var path = Path.Join(RepoPaths.Root, "docs", "src", "content", "docs", "usage", "editing-methods.md");
         var lines = await File.ReadAllLinesAsync(path, TestContext.CancellationToken);
         var inside = false;
         var comparisons = new Dictionary<string, ComparisonReply>(StringComparer.Ordinal);

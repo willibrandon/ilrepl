@@ -79,7 +79,7 @@ public sealed class TypeLookupEditTests
             var context = new AssemblyLoadContext("copied-lookups", isCollectible: true);
             try
             {
-                var assembly = context.LoadFromStream(new MemoryStream(image));
+                var assembly = context.LoadImage(image);
                 Assert.AreEqual(1, assembly.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
             }
             finally
@@ -137,7 +137,7 @@ public sealed class TypeLookupEditTests
             var context = new AssemblyLoadContext("lookup-resolvers", isCollectible: true);
             try
             {
-                var assembly = context.LoadFromStream(new MemoryStream(image));
+                var assembly = context.LoadImage(image);
                 Assert.IsTrue((bool)assembly.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null)!);
             }
             finally
@@ -232,7 +232,7 @@ public sealed class TypeLookupEditTests
             var context = new AssemblyLoadContext("type-lookups", isCollectible: true);
             try
             {
-                var assembly = context.LoadFromStream(new MemoryStream(image));
+                var assembly = context.LoadImage(image);
                 Assert.IsFalse((bool)assembly.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null)!);
                 Assert.DoesNotContain(reference => reference.Name == "IlRepl.Engine", assembly.GetReferencedAssemblies());
             }

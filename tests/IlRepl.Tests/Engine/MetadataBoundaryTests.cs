@@ -196,7 +196,7 @@ public sealed class MetadataBoundaryTests
 
             try
             {
-                var exported = context.LoadFromStream(new MemoryStream(image));
+                var exported = context.LoadImage(image);
                 if (retained)
                 {
                     Assert.Contains(reference => reference.Name == inspector.GetName().Name, exported.GetReferencedAssemblies());

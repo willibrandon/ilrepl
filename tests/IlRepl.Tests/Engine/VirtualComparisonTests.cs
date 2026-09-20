@@ -107,7 +107,8 @@ public sealed class VirtualComparisonTests
         var package = ComparisonCapture.Create(session, "Copy using Scenario");
         foreach (var image in new[] { package.Original, package.Edited })
         {
-            using var module = ModuleDefinition.ReadModule(new MemoryStream(image.Image));
+            using var moduleStream = new MemoryStream(image.Image);
+            using var module = ModuleDefinition.ReadModule(moduleStream);
             var owner = module.GetTypes().Single(type => type.Namespace == "IlRepl.Edits.Copy"
                 && type.Name == (generic ? "Owner`1" : "Owner"));
             Assert.AreSequenceEqual(interfaceType ? ["Read"] : [".ctor", "Read"], owner.Methods.Select(method => method.Name).Order());

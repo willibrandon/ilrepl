@@ -243,7 +243,7 @@ public sealed class SessionReplayTests
     public void RunSession_InvalidDraftFailsBeforeAnyExecution(string draft)
     {
         var directory = Directory.CreateTempSubdirectory("ilrepl-replay-preflight-");
-        var marker = Path.Combine(directory.FullName, "marker");
+        var marker = Path.Join(directory.FullName, "marker");
         try
         {
             using var source = new ReplCore();
@@ -295,7 +295,7 @@ public sealed class SessionReplayTests
     public void RunSession_InvalidHistoricalBoundaryFailsBeforeAnyExecution()
     {
         var directory = Directory.CreateTempSubdirectory("ilrepl-replay-history-");
-        var marker = Path.Combine(directory.FullName, "marker");
+        var marker = Path.Join(directory.FullName, "marker");
         try
         {
             using var source = new ReplCore();
@@ -331,7 +331,7 @@ public sealed class SessionReplayTests
     public void RunSession_StopsAtFirstRuntimeFailureWithoutDiscardingLaterSource()
     {
         var directory = Directory.CreateTempSubdirectory("ilrepl-replay-failure-");
-        var marker = Path.Combine(directory.FullName, "marker");
+        var marker = Path.Join(directory.FullName, "marker");
         try
         {
             using var source = new ReplCore();
@@ -435,7 +435,7 @@ public sealed class SessionReplayTests
     public void RunSession_RecordsLatestOutputWithoutDuplicatingSource(string? draft)
     {
         var directory = Directory.CreateTempSubdirectory("ilrepl-replay-output-");
-        var path = Path.Combine(directory.FullName, "value");
+        var path = Path.Join(directory.FullName, "value");
         try
         {
             File.WriteAllText(path, "original");

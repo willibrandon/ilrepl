@@ -211,8 +211,10 @@ public sealed class SessionDependencyReplacementTests
 
     private static byte[] DelegatingImage(SessionDependencyFixture fixture, string name, byte[] dependency)
     {
-        using var assembly = AssemblyDefinition.ReadAssembly(new MemoryStream(Image(fixture, name)));
-        using var target = AssemblyDefinition.ReadAssembly(new MemoryStream(dependency));
+        using var assemblyStream = new MemoryStream(Image(fixture, name));
+        using var assembly = AssemblyDefinition.ReadAssembly(assemblyStream);
+        using var targetStream = new MemoryStream(dependency);
+        using var target = AssemblyDefinition.ReadAssembly(targetStream);
         var method = assembly.MainModule.GetType("DependencySamples.Values").Methods.Single();
         method.Body.Instructions.Clear();
         method.Body.Instructions.Add(Instruction.Create(OpCodes.Call,

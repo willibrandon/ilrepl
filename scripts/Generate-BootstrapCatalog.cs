@@ -8,7 +8,7 @@ using IlRepl.Protocol;
 using IlRepl.Repl;
 
 var root = new DirectoryInfo(Directory.GetCurrentDirectory());
-while (root is not null && !File.Exists(Path.Combine(root.FullName, "IlRepl.slnx")))
+while (root is not null && !File.Exists(Path.Join(root.FullName, "IlRepl.slnx")))
 {
     root = root.Parent;
 }
@@ -59,7 +59,7 @@ for (var index = 0; index < groups.Length; index++)
 
 text.AppendLine("}");
 var content = text.ToString().ReplaceLineEndings("\n");
-var output = Path.Combine(root.FullName, "src", "IlRepl.Protocol", "BootstrapCatalog.Generated.cs");
+var output = Path.Join(root.FullName, "src", "IlRepl.Protocol", "BootstrapCatalog.Generated.cs");
 if (args.Contains("--check", StringComparer.Ordinal))
 {
     if (!File.Exists(output) || File.ReadAllText(output).ReplaceLineEndings("\n") != content)

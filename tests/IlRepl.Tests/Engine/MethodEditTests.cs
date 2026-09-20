@@ -560,7 +560,7 @@ public sealed class MethodEditTests
     [TestMethod]
     public void PrepareAndCommit_DoNotRunUserCode()
     {
-        var marker = Path.Combine(Path.GetTempPath(), "ilrepl-edit-test-" + Guid.NewGuid().ToString("N"));
+        var marker = Path.Join(Path.GetTempPath(), "ilrepl-edit-test-" + Guid.NewGuid().ToString("N"));
         try
         {
             var session = IlLines.Load(".method int32 Mark() {", "ldstr " + LiteralParser.Escape(marker), "ldstr \"ran\"",
@@ -596,7 +596,7 @@ public sealed class MethodEditTests
         var context = new AssemblyLoadContext("exported-edit-" + Guid.NewGuid().ToString("N"), isCollectible: true);
         try
         {
-            var assembly = context.LoadFromStream(new MemoryStream(image));
+            var assembly = context.LoadImage(image);
             Assert.DoesNotContain(reference => reference.Name!.StartsWith("ilrepl", StringComparison.OrdinalIgnoreCase),
                 assembly.GetReferencedAssemblies());
             var owner = assembly.GetType(ownerName, throwOnError: true)!;

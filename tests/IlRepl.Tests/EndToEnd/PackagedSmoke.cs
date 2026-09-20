@@ -66,7 +66,7 @@ internal static class PackagedSmoke
         await SubmitAsync(auto, "ret", cancellationToken);
         await SubmitAsync(auto, "}", cancellationToken);
         await auto.WaitUntilTextAsync("end of method Answer");
-        var running = Path.Combine(directory, "running");
+        var running = Path.Join(directory, "running");
         await SubmitAsync(auto, ".method void Spin() {", cancellationToken);
         await SubmitAsync(auto, "ldstr " + LiteralParser.Escape(running), cancellationToken);
         await SubmitAsync(auto, "ldstr \"started\"", cancellationToken);
@@ -107,7 +107,7 @@ internal static class PackagedSmoke
         await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: cancellationToken);
         await auto.WaitUntilNoTextAsync("// unsent after completion");
         Assert.IsFalse(run.IsCompleted, "After completed execution, Ctrl+C must clear the draft and retain the frontend.");
-        var saved = Path.Combine(directory, "retained.ilrepl.json");
+        var saved = Path.Join(directory, "retained.ilrepl.json");
         await SubmitAsync(auto, ".session save " + LiteralParser.Escape(saved) + " --embed", cancellationToken);
         await auto.WaitUntilAsync(_ => File.Exists(saved));
         await auto.WaitUntilTextAsync("saved session");
@@ -122,11 +122,11 @@ internal static class PackagedSmoke
     private static async Task OfflineSaveAsync(string executable, string directory, CancellationToken cancellationToken)
     {
         await using var terminal = CreateTerminal(executable, directory, out var diagnosticsPath,
-            new Dictionary<string, string> { ["ILREPL_HOST_PATH"] = Path.Combine(directory, "missing-host.dll") });
+            new Dictionary<string, string> { ["ILREPL_HOST_PATH"] = Path.Join(directory, "missing-host.dll") });
         var run = terminal.RunAsync(cancellationToken);
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(30));
         await WaitForStartupAsync(auto, run, "host unavailable", diagnosticsPath, cancellationToken);
-        var saved = Path.Combine(directory, "offline.ilrepl.json");
+        var saved = Path.Join(directory, "offline.ilrepl.json");
         await SubmitAsync(auto, ".session save " + LiteralParser.Escape(saved) + " --embed", cancellationToken);
         await auto.WaitUntilAsync(_ => File.Exists(saved));
         await auto.WaitUntilTextAsync("saved session");
@@ -143,8 +143,8 @@ internal static class PackagedSmoke
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(30));
         await WaitForStartupAsync(auto, run, "il[1]>", diagnosticsPath, cancellationToken);
         await auto.WaitUntilNoTextAsync("starting execution host");
-        var identity = Path.Combine(directory, "runtime-before-adoption");
-        var release = Path.Combine(directory, "release-adoption");
+        var identity = Path.Join(directory, "runtime-before-adoption");
+        var release = Path.Join(directory, "release-adoption");
         string[] source =
         [
             ".class public Keeper {", ".field public static int32 Value", "}",
@@ -167,7 +167,7 @@ internal static class PackagedSmoke
         Assert.IsFalse(host.HasExited, "Losing the packaged supervisor must preserve the running host.");
         await File.WriteAllTextAsync(release, "release", cancellationToken);
         await auto.WaitUntilTextAsync("= 73 : int32");
-        var adoptedIdentity = Path.Combine(directory, "runtime-after-adoption");
+        var adoptedIdentity = Path.Join(directory, "runtime-after-adoption");
         string[] continued =
         [
             "ldstr " + LiteralParser.Escape(adoptedIdentity), "call int32 Environment::get_ProcessId()", "box int32",
@@ -242,7 +242,7 @@ internal static class PackagedSmoke
         IReadOnlyDictionary<string, string>? environment = null,
         WorkloadRecorder? recorder = null)
     {
-        var stderr = Path.Combine(directory, "frontend-" + Guid.NewGuid().ToString("N") + ".stderr");
+        var stderr = Path.Join(directory, "frontend-" + Guid.NewGuid().ToString("N") + ".stderr");
         diagnosticsPath = stderr;
         var builder = Hex1bTerminal.CreateBuilder()
             .WithPtyProcess(options =>

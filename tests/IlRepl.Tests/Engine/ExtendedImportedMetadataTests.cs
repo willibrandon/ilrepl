@@ -295,7 +295,8 @@ public sealed class ExtendedImportedMetadataTests
         foreach (var image in Images(session))
         {
             InExport(image, edit, AssertDispatch);
-            using var module = CecilModule.ReadModule(new MemoryStream(image));
+            using var moduleStream = new MemoryStream(image);
+            using var module = CecilModule.ReadModule(moduleStream);
             var owner = module.Types.Single(type => type.FullName == edit.Method.DeclaringType!.FullName);
             var implementation = owner.Methods.Single(method => method.Name == "Alternate");
             Assert.IsTrue(implementation.IsPrivate);
@@ -403,7 +404,7 @@ public sealed class ExtendedImportedMetadataTests
         var context = new AssemblyLoadContext("extended-metadata-" + Guid.NewGuid(), isCollectible: true);
         try
         {
-            var assembly = context.LoadFromStream(new MemoryStream(image));
+            var assembly = context.LoadImage(image);
             inspect(assembly.GetType(edit.Method!.DeclaringType!.FullName!, throwOnError: true)!);
         }
         finally

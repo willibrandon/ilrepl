@@ -144,7 +144,7 @@ public sealed class CompletionLifetimeTests
     [TestMethod]
     public async Task Completion_InitializerAndConstructor_AreNeverExecuted()
     {
-        var marker = Path.Combine(Path.GetTempPath(), "ilrepl-completion-" + Guid.NewGuid().ToString("N"));
+        var marker = Path.Join(Path.GetTempPath(), "ilrepl-completion-" + Guid.NewGuid().ToString("N"));
         var path = LiteralParser.Escape(marker);
         var session = new Session();
         using var completer = new OperandCompleter(session);

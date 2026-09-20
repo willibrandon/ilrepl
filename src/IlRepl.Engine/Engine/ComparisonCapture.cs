@@ -165,8 +165,9 @@ public static partial class ComparisonCapture
             }
         }, writer => ComparisonInstrumentation.Complete(writer, selectedMethod!, entry!, externalVarArg));
 
-        using (var module = ModuleDefinition.ReadModule(new MemoryStream(image, writable: false)))
+        using (var stream = new MemoryStream(image, writable: false))
         {
+            using var module = ModuleDefinition.ReadModule(stream);
             foreach (var reference in module.AssemblyReferences)
             {
                 CaptureDependency(reference.FullName, session, dependencies, source: family.SourceResolver);
@@ -307,7 +308,8 @@ public static partial class ComparisonCapture
             IsCollectible = assembly.IsCollectible,
         });
 
-        using var module = ModuleDefinition.ReadModule(new MemoryStream(image, writable: false));
+        using var stream = new MemoryStream(image, writable: false);
+        using var module = ModuleDefinition.ReadModule(stream);
         if (module.Mvid != assembly.ManifestModule.ModuleVersionId)
         {
             throw new ReplException($"dependency image {identity} no longer matches the loaded module");

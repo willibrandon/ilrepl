@@ -88,7 +88,7 @@ public sealed class BatchInterruptTests
     {
         var token = TestContext.CancellationToken;
         using var files = new SessionWorkspaceFixture();
-        var marker = Path.Combine(files.DirectoryPath, "host.pid");
+        var marker = Path.Join(files.DirectoryPath, "host.pid");
         string[] source =
         [
             "ldstr " + LiteralParser.Escape(marker), "call int32 System.Environment::get_ProcessId()",

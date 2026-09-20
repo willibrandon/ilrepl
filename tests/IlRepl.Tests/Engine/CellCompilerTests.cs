@@ -22,8 +22,8 @@ public sealed class CellCompilerTests
         session.AddLine("ldc.i4 2");
         session.AddLine("mul");
 
-        var directory = Path.Combine(Path.GetTempPath(), "ilrepl-tests", Guid.NewGuid().ToString("N"));
-        var path = Path.Combine(directory, "doubler.dll");
+        var directory = Path.Join(Path.GetTempPath(), "ilrepl-tests", Guid.NewGuid().ToString("N"));
+        var path = Path.Join(directory, "doubler.dll");
         try
         {
             session.Save(path);
@@ -60,7 +60,7 @@ public sealed class CellCompilerTests
     {
         var session = new Session();
         session.AddLine("ldc.i4 5");
-        var path = Path.Combine(Path.GetTempPath(), "ilrepl-tests", Guid.NewGuid().ToString("N") + ".dll");
+        var path = Path.Join(Path.GetTempPath(), "ilrepl-tests", Guid.NewGuid().ToString("N") + ".dll");
         try
         {
             session.Save(path);
@@ -130,8 +130,8 @@ public sealed class CellCompilerTests
             session.AddLine(line);
         }
 
-        var directory = Path.Combine(Path.GetTempPath(), "ilrepl-tests", Guid.NewGuid().ToString("N"));
-        var path = Path.Combine(directory, "fib.dll");
+        var directory = Path.Join(Path.GetTempPath(), "ilrepl-tests", Guid.NewGuid().ToString("N"));
+        var path = Path.Join(directory, "fib.dll");
         try
         {
             session.Save(path);

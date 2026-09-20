@@ -19,13 +19,13 @@ public sealed class ObservedBindingTests
     {
         var dependencyName = "CompletionDependency" + Guid.NewGuid().ToString("N");
         var image = Dependency(dependencyName, new Version(1, 0, 0, 0));
-        var first = AssemblyLoadContext.Default.LoadFromStream(new MemoryStream(image));
+        var first = AssemblyLoadContext.Default.LoadImage(image);
         var secondContext = new AssemblyLoadContext("completion-alternate", isCollectible: true);
-        var second = secondContext.LoadFromStream(new MemoryStream(image));
+        var second = secondContext.LoadImage(image);
         var requesterContext = new BindingProbeContext(dependencyName, second);
         try
         {
-            var requester = requesterContext.LoadFromStream(new MemoryStream(Requester(dependencyName, new Version(1, 0, 0, 0))));
+            var requester = requesterContext.LoadImage(Requester(dependencyName, new Version(1, 0, 0, 0)));
             var source = AssemblySymbolSource.For(requester)!;
             var assemblies = new[] { requester, first, second, typeof(object).Assembly };
             var sources = assemblies.Select(assembly => (assembly, AssemblySymbolSource.For(assembly)!)).ToArray();
@@ -74,8 +74,8 @@ public sealed class ObservedBindingTests
         var context = new AssemblyLoadContext(name, isCollectible: true);
         try
         {
-            var dependency = context.LoadFromStream(new MemoryStream(Dependency(name, new Version(loadedVersion, 0, 0, 0))));
-            var requester = context.LoadFromStream(new MemoryStream(Requester(name, new Version(requestedVersion, 0, 0, 0))));
+            var dependency = context.LoadImage(Dependency(name, new Version(loadedVersion, 0, 0, 0)));
+            var requester = context.LoadImage(Requester(name, new Version(requestedVersion, 0, 0, 0)));
             var source = AssemblySymbolSource.For(requester)!;
             var catalog = new LoadedBindingCatalog(new[] { requester, dependency, typeof(object).Assembly }
                 .Select(assembly => (assembly, AssemblySymbolSource.For(assembly)!)));
@@ -113,10 +113,10 @@ public sealed class ObservedBindingTests
         {
             var version = new Version(1, 0, 0, 0);
             var dependencies = new[] { name + "First", name + "Second" }.Select(dependency =>
-                context.LoadFromStream(new MemoryStream(Image(dependency, version, module => module.Types.Add(
+                context.LoadImage(Image(dependency, version, module => module.Types.Add(
                     new TypeDefinition("N", "I", Mono.Cecil.TypeAttributes.Public | Mono.Cecil.TypeAttributes.Interface
-                        | Mono.Cecil.TypeAttributes.Abstract)))))).ToArray();
-            var requester = context.LoadFromStream(new MemoryStream(Image(name, version, module =>
+                        | Mono.Cecil.TypeAttributes.Abstract))))).ToArray();
+            var requester = context.LoadImage(Image(name, version, module =>
             {
                 var owner = new TypeDefinition("N", "Owner", Mono.Cecil.TypeAttributes.Public,
                     module.ImportReference(typeof(object)));
@@ -142,7 +142,7 @@ public sealed class ObservedBindingTests
                 }
 
                 module.Types.Add(owner);
-            })));
+            }));
 
             var actualOwner = requester.GetType("N.Owner")!;
             var runtime = new RuntimeBindingScope(new ParseContext([], [], GenericContext.Empty, new TypeResolver(), []));

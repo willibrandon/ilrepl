@@ -7,7 +7,7 @@ using System.Text;
 using IlRepl.Engine;
 
 var root = FindRepoRoot();
-var output = Path.Combine(root, "docs", "src", "content", "docs", "reference", "opcodes.md");
+var output = Path.Join(root, "docs", "src", "content", "docs", "reference", "opcodes.md");
 Directory.CreateDirectory(Path.GetDirectoryName(output)!);
 
 var sb = new StringBuilder();
@@ -92,7 +92,7 @@ static string FindRepoRoot()
     var directory = Directory.GetCurrentDirectory();
     while (directory is not null)
     {
-        if (File.Exists(Path.Combine(directory, "IlRepl.slnx")))
+        if (File.Exists(Path.Join(directory, "IlRepl.slnx")))
         {
             return directory;
         }

@@ -49,7 +49,7 @@ public sealed class ReflectionRuntimeMetadataTests
             var context = new AssemblyLoadContext("runtime-metadata-export", isCollectible: true);
             try
             {
-                var assembly = context.LoadFromStream(new MemoryStream(image));
+                var assembly = context.LoadImage(image);
                 Assert.AreEqual(3, assembly.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
                 AssertMetadata(assembly.GetType(edit.Method.DeclaringType!.FullName!)!, virtualMethod, runtime);
             }

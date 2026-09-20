@@ -58,7 +58,8 @@ public sealed class InheritedInterfaceEditTests
         session.AddLine("call Copy");
         foreach (var image in new[] { AssemblyExporter.Write(session, "interface-slots"), IlasmLocator.Assemble(session.ToIlAsm()) })
         {
-            using var module = ModuleDefinition.ReadModule(new MemoryStream(image));
+            using var moduleStream = new MemoryStream(image);
+            using var module = ModuleDefinition.ReadModule(moduleStream);
             var owner = module.GetTypes().Single(type => type.Namespace == "IlRepl.Edits.Copy"
                 && type.Name == (generic ? "Owner`1" : "Owner"));
             Assert.HasCount(behavior is "reimplement" or "explicit" or "class-explicit" ? 1 : 0, owner.Interfaces);
@@ -68,7 +69,7 @@ public sealed class InheritedInterfaceEditTests
             var context = new AssemblyLoadContext("interface-slots", isCollectible: true);
             try
             {
-                var assembly = context.LoadFromStream(new MemoryStream(image));
+                var assembly = context.LoadImage(image);
                 Assert.AreEqual(expected + 10, assembly.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
             }
             finally

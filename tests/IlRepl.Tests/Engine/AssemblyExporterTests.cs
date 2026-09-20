@@ -47,7 +47,7 @@ public sealed class AssemblyExporterTests
     {
         var image = AssemblyExporter.Write(session, name);
         var context = new AssemblyLoadContext("export-" + name, isCollectible: true);
-        return (context.LoadFromStream(new MemoryStream(image)), context);
+        return (context.LoadImage(image), context);
     }
 
     /// <summary>
@@ -126,7 +126,7 @@ public sealed class AssemblyExporterTests
         var context = new AssemblyLoadContext("declared", isCollectible: true);
         try
         {
-            var assembly = context.LoadFromStream(new MemoryStream(image));
+            var assembly = context.LoadImage(image);
             var bare = assembly.GetType("Bare")!;
             Assert.IsEmpty(bare.GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance));
             Assert.IsFalse(bare.GetField("Rows")!.FieldType.IsSZArray);

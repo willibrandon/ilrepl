@@ -205,7 +205,7 @@ public sealed class EditedOverrideMetadataTests
             var context = new AssemblyLoadContext("override-edit", isCollectible: true);
             try
             {
-                var assembly = context.LoadFromStream(new MemoryStream(image));
+                var assembly = context.LoadImage(image);
                 var original = edit.Method!.DeclaringType!;
                 var owner = assembly.GetType(original.IsGenericType ? original.GetGenericTypeDefinition().FullName! : original.FullName!)!;
                 if (owner.IsGenericTypeDefinition)

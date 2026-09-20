@@ -29,10 +29,10 @@ public sealed class EngineAssemblyRefreshTests
             var ct = TestContext.CancellationToken;
             using var fixture = new SessionDependencyFixture();
             fixture.WritePackage(fixture.AssemblyName, "1.0.0", 42);
-            var image = Path.Combine(directory, fixture.AssemblyName + ".dll");
+            var image = Path.Join(directory, fixture.AssemblyName + ".dll");
             await File.WriteAllBytesAsync(image, fixture.PackageImage(fixture.AssemblyName, "1.0.0"), ct);
-            var marker = Path.Combine(directory, "entered");
-            var release = Path.Combine(directory, "release");
+            var marker = Path.Join(directory, "entered");
+            var release = Path.Join(directory, "release");
             await using var engine = useHost ? (IReplEngine)await HostPaths.StartEngineAsync(ct) : new InProcessEngine();
             Task<HandleReply>? running = null;
             try

@@ -125,7 +125,7 @@ public sealed class EngineCompletionTests
     {
         var ct = TestContext.CancellationToken;
         await using var engine = useHost ? (IReplEngine)await HostPaths.StartEngineAsync(ct) : new InProcessEngine();
-        var marker = Path.Combine(Path.GetTempPath(), "ilrepl-completion-gate-" + Guid.NewGuid().ToString("N"));
+        var marker = Path.Join(Path.GetTempPath(), "ilrepl-completion-gate-" + Guid.NewGuid().ToString("N"));
         var release = marker + ".release";
         Task<HandleReply>? running = null;
         try

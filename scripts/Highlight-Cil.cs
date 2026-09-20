@@ -21,8 +21,8 @@ using IlRepl.Repl;
 using IlRepl.Tui;
 
 var root = FindRoot();
-var docs = Path.Combine(root, "docs", "src", "content", "docs");
-var output = Path.Combine(root, "docs", "src", "generated", "cil-tokens.json");
+var docs = Path.Join(root, "docs", "src", "content", "docs");
+var output = Path.Join(root, "docs", "src", "generated", "cil-tokens.json");
 var tokenizer = new CilTokenizer(CilVocabularyBuilder.Vocabulary);
 var blocks = new SortedDictionary<string,
     (string Where, string Language, bool Editor, List<IReadOnlyList<TranscriptSpan>> Lines)>(StringComparer.Ordinal);
@@ -35,7 +35,7 @@ var cwd = Directory.GetCurrentDirectory();
 var files = Directory.EnumerateFiles(docs, "*.md*", SearchOption.AllDirectories);
 if (verify || update)
 {
-    files = files.Append(Path.Combine(root, "README.md"));
+    files = files.Append(Path.Join(root, "README.md"));
 }
 
 files = files.Order(StringComparer.Ordinal);
@@ -47,7 +47,7 @@ foreach (var file in files)
     // One session per page, in a scratch directory where a .save writes nowhere that matters
     // and a .load of a sample finds it as it would from the repository root.
     var scratch = Directory.CreateTempSubdirectory("ilrepl-docs-");
-    Directory.CreateSymbolicLink(Path.Combine(scratch.FullName, "samples"), Path.Combine(root, "samples"));
+    Directory.CreateSymbolicLink(Path.Join(scratch.FullName, "samples"), Path.Join(root, "samples"));
     Directory.SetCurrentDirectory(scratch.FullName);
     await using var engine = new InProcessEngine();
     try
@@ -105,7 +105,7 @@ foreach (var file in files)
             // Source, or a view of the editor, is drawn as the editor draws it: an error is
             // underlined under its own colour. A transcript's echo has the error in red.
             var editor = language == "cil" || IsEditorView(body);
-            if (file != Path.Combine(root, "README.md"))
+            if (file != Path.Join(root, "README.md"))
             {
                 blocks[Key(body)] = (where, language, editor, spans);
             }
@@ -207,7 +207,7 @@ static string Key(IReadOnlyList<string> body) => Convert.ToHexStringLower(SHA256
 // the stylesheet that colours each class on a dark ground and on a light one.
 async Task WriteHeroAsync()
 {
-    var source = Path.Combine(root, "docs", "src", "hero.ilrepl");
+    var source = Path.Join(root, "docs", "src", "hero.ilrepl");
     var body = File.ReadAllLines(source).ToList();
     while (body.Count > 0 && body[^1].Trim().Length == 0)
     {
@@ -253,7 +253,7 @@ async Task WriteHeroAsync()
     component.Append("</pre>\n");
     if (!verify)
     {
-        File.WriteAllText(Path.Combine(root, "docs", "src", "generated", "HeroPrompt.astro"), component.ToString());
+        File.WriteAllText(Path.Join(root, "docs", "src", "generated", "HeroPrompt.astro"), component.ToString());
     }
 
     var css = new StringBuilder();
@@ -278,7 +278,7 @@ async Task WriteHeroAsync()
         + $"#{Hex(SpanPalette.LightColor(SpanStyle.Error))}; }}\n");
     if (!verify)
     {
-        File.WriteAllText(Path.Combine(root, "docs", "src", "generated", "cil-palette.css"), css.ToString());
+        File.WriteAllText(Path.Join(root, "docs", "src", "generated", "cil-palette.css"), css.ToString());
     }
 }
 
@@ -865,7 +865,7 @@ static string Hex(Hex1bColor color) => $"{color.R:x2}{color.G:x2}{color.B:x2}";
 static string FindRoot()
 {
     var directory = Directory.GetCurrentDirectory();
-    while (directory is not null && !Directory.Exists(Path.Combine(directory, "docs", "src", "content", "docs")))
+    while (directory is not null && !Directory.Exists(Path.Join(directory, "docs", "src", "content", "docs")))
     {
         directory = Path.GetDirectoryName(directory);
     }

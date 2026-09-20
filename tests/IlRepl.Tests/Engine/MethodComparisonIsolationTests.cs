@@ -27,7 +27,7 @@ public sealed class MethodComparisonIsolationTests
         var parentDirectory = Environment.CurrentDirectory;
         try
         {
-            var path = Path.Combine(fixture.FullName, "input.txt");
+            var path = Path.Join(fixture.FullName, "input.txt");
             await File.WriteAllTextAsync(path, "seed", TestContext.CancellationToken);
             var session = IlLines.Load(".method string Read() {", "ldstr \"input.txt\"",
                 "call string System.IO.File::ReadAllText(string)", "call void Console::Write(string)",
@@ -219,7 +219,7 @@ public sealed class MethodComparisonIsolationTests
         var directory = Directory.CreateTempSubdirectory("ilrepl-cancel-proof-");
         try
         {
-            var path = Path.Combine(directory.FullName, "started.pid");
+            var path = Path.Join(directory.FullName, "started.pid");
             var session = IlLines.Load(".method int32 Spin() {", ".locals init (int32 pid)",
                 "ldstr \"stdout é\"", "call void Console::Write(string)",
                 "call class System.IO.TextWriter Console::get_Error()", "ldstr \"stderr λ\"",

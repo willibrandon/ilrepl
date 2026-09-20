@@ -98,12 +98,9 @@ public sealed partial class TypeResolver : IDisposable
         }
 
         _snapshotResolvers.Clear();
-        foreach (var context in _previousContexts.Append(_context))
+        foreach (var context in _previousContexts.Append(_context).Where(context => context.IsCollectible))
         {
-            if (context.IsCollectible)
-            {
-                context.Unload();
-            }
+            context.Unload();
         }
 
         _previousContexts.Clear();
@@ -399,12 +396,9 @@ public sealed partial class TypeResolver : IDisposable
                     continue;
                 }
 
-                foreach (var t in types)
+                foreach (var t in types.Where(t => t.Name == clrName && !matches.Contains(t)))
                 {
-                    if (t.Name == clrName && !matches.Contains(t))
-                    {
-                        matches.Add(t);
-                    }
+                    matches.Add(t);
                 }
             }
 

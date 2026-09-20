@@ -32,7 +32,7 @@ internal static partial class ConsoleStartupProbe
             await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, new Transcript(),
                 onPrompt: value => prompt = value).WithPresentation(new ObservedConsolePresentation(directory)).WithMouse().Build();
             await IlReplApp.RunAsync(terminal, prompt, token);
-            await File.WriteAllTextAsync(Path.Combine(directory, "draft.txt"), prompt!.Text, token);
+            await File.WriteAllTextAsync(Path.Join(directory, "draft.txt"), prompt!.Text, token);
         }
         else if (mode.StartsWith("read-", StringComparison.Ordinal))
         {
@@ -148,11 +148,11 @@ internal static partial class ConsoleStartupProbe
         RequireRestored(original);
         Console.WriteLine("console-mode-restored");
         var line = await Console.In.ReadLineAsync(token);
-        await File.WriteAllTextAsync(Path.Combine(directory, "cooked-line.txt"), line, token);
+        await File.WriteAllTextAsync(Path.Join(directory, "cooked-line.txt"), line, token);
         Console.WriteLine("cooked-line:" + line);
         // PTY process exit can stop the parent's output pump before it applies the final bytes.
         // Retain the actual input and stay alive until the parent observes the complete rendered line.
-        while (!File.Exists(Path.Combine(directory, "cooked-line.observed")))
+        while (!File.Exists(Path.Join(directory, "cooked-line.observed")))
         {
             await Task.Delay(1, token);
         }

@@ -49,10 +49,10 @@ root.SetAction(async (parseResult, cancellationToken) =>
     var repo = FindRepoRoot();
     var rid = parseResult.GetValue(ridOption)!;
     var version = parseResult.GetValue(versionOption)!.TrimStart('v');
-    var artifacts = Path.GetFullPath(Path.Combine(parseResult.GetValue(outputOption)!, rid), repo);
-    var publishDirectory = Path.Combine(artifacts, "publish");
-    var packagesDirectory = Path.Combine(artifacts, "packages");
-    var project = Path.Combine(repo, "src", "IlRepl", "IlRepl.csproj");
+    var artifacts = Path.GetFullPath(Path.Join(parseResult.GetValue(outputOption)!, rid), repo);
+    var publishDirectory = Path.Join(artifacts, "publish");
+    var packagesDirectory = Path.Join(artifacts, "packages");
+    var project = Path.Join(repo, "src", "IlRepl", "IlRepl.csproj");
     var buildOnly = parseResult.GetValue(buildOnlyOption);
     var smokeOnly = parseResult.GetValue(smokeOnlyOption);
     if (buildOnly && smokeOnly)
@@ -90,20 +90,20 @@ root.SetAction(async (parseResult, cancellationToken) =>
         return 0;
     }
 
-    var executable = Path.Combine(publishDirectory, OperatingSystem.IsWindows() ? "ilrepl.exe" : "ilrepl");
+    var executable = Path.Join(publishDirectory, OperatingSystem.IsWindows() ? "ilrepl.exe" : "ilrepl");
     if (!File.Exists(executable))
     {
         Console.Error.WriteLine($"expected {executable} after publish");
         return 1;
     }
 
-    if (!File.Exists(Path.Combine(publishDirectory, "host", "ilrepl-host.dll")))
+    if (!File.Exists(Path.Join(publishDirectory, "host", "ilrepl-host.dll")))
     {
         Console.Error.WriteLine("the host was not bundled beside the executable");
         return 1;
     }
 
-    var nativeDiagnostics = Directory.EnumerateFiles(Path.Combine(publishDirectory, "host"), "*", SearchOption.AllDirectories)
+    var nativeDiagnostics = Directory.EnumerateFiles(Path.Join(publishDirectory, "host"), "*", SearchOption.AllDirectories)
         .Where(path => Path.GetFileName(path) is "TraceEventNative.dll" or "KernelTraceControl.dll"
             or "KernelTraceControl.Win61.dll" or "msdia140.dll").ToArray();
     if (nativeDiagnostics.Length != 0)
@@ -148,7 +148,7 @@ root.SetAction(async (parseResult, cancellationToken) =>
             var settings = Directory.GetFiles(unpacked, "DotnetToolSettings.xml", SearchOption.AllDirectories).Single();
             var packagedDirectory = Path.GetDirectoryName(settings)!;
             var entry = XDocument.Load(settings).Descendants("Command").Single().Attribute("EntryPoint")!.Value;
-            var packagedExecutable = Path.Combine(packagedDirectory, entry);
+            var packagedExecutable = Path.Join(packagedDirectory, entry);
             if (!OperatingSystem.IsWindows())
             {
                 File.SetUnixFileMode(packagedExecutable, File.GetUnixFileMode(packagedExecutable)
@@ -235,7 +235,7 @@ static Dictionary<string, string>? ReadReadyToRunHost(string directory, string r
     var evidence = new Dictionary<string, string> { ["readyToRunMachine"] = $"0x{expectedMachine:X4}" };
     try
     {
-        var dependencies = File.ReadAllBytes(Path.Combine(directory, "host", "ilrepl-host.deps.json"));
+        var dependencies = File.ReadAllBytes(Path.Join(directory, "host", "ilrepl-host.deps.json"));
         using var document = JsonDocument.Parse(dependencies);
         var runtimeTarget = document.RootElement.GetProperty("runtimeTarget").GetProperty("name").GetString();
         if (runtimeTarget is null || !runtimeTarget.EndsWith("/" + rid, StringComparison.Ordinal))
@@ -260,7 +260,7 @@ static Dictionary<string, string>? ReadReadyToRunHost(string directory, string r
         ("IlRepl.Protocol.dll", "protocolSha256"),
     })
     {
-        var path = Path.Combine(directory, "host", file);
+        var path = Path.Join(directory, "host", file);
         try
         {
             using var stream = File.OpenRead(path);
@@ -295,7 +295,7 @@ static string? ReadTerminalHelperHash(string directory, string rid)
         return null;
     }
 
-    using var stream = File.OpenRead(Path.Combine(directory, "libhex1binterop.so"));
+    using var stream = File.OpenRead(Path.Join(directory, "libhex1binterop.so"));
     return Convert.ToHexString(SHA256.HashData(stream));
 }
 
@@ -309,7 +309,7 @@ static async Task WriteEvidenceAsync(
     CancellationToken cancellationToken)
 {
     Directory.CreateDirectory(artifacts);
-    await using var file = File.Create(Path.Combine(artifacts, "smoke-results.json"));
+    await using var file = File.Create(Path.Join(artifacts, "smoke-results.json"));
     await using var writer = new Utf8JsonWriter(file, new JsonWriterOptions { Indented = true });
     writer.WriteStartObject();
     writer.WriteNumber("schemaVersion", 2);
@@ -377,7 +377,7 @@ static async Task<bool> SmokePublishedAsync(
     }
 
     var packaged = await RunAsync(repo, "dotnet",
-        ["run", "--project", Path.Combine(repo, "tests", "IlRepl.Tests", "IlRepl.Tests.csproj"), "-c", "Release", "--",
+        ["run", "--project", Path.Join(repo, "tests", "IlRepl.Tests", "IlRepl.Tests.csproj"), "-c", "Release", "--",
             "--packaged-smoke", executable], cancellationToken);
     return packaged == 0;
 }
@@ -477,10 +477,10 @@ static async Task<bool> SmokeSessionsAsync(string repo, string publishDirectory,
     var directory = Directory.CreateTempSubdirectory("ilrepl-native-session-").FullName;
     try
     {
-        var feed = Path.Combine(directory, "feed");
+        var feed = Path.Join(directory, "feed");
         Directory.CreateDirectory(feed);
         var packed = await RunAsync(repo, "dotnet",
-            ["pack", Path.Combine(repo, "samples", "Greeter", "Greeter.csproj"), "-c", "Release", "-o", feed,
+            ["pack", Path.Join(repo, "samples", "Greeter", "Greeter.csproj"), "-c", "Release", "-o", feed,
                 "-p:IsPackable=true", "-p:PackageId=IlRepl.SessionSmoke", "-p:PackageVersion=1.0.0", "--nologo", "-v", "quiet"],
             cancellationToken);
         if (packed != 0)
@@ -494,15 +494,15 @@ static async Task<bool> SmokeSessionsAsync(string repo, string publishDirectory,
             new XElement("packageSourceMapping", new XElement("clear")),
             new XElement("fallbackPackageFolders", new XElement("clear")),
             new XElement("config", new XElement("add", new XAttribute("key", "globalPackagesFolder"),
-                new XAttribute("value", Path.Combine(directory, "packages")))))).Save(Path.Combine(directory, "NuGet.Config"));
+                new XAttribute("value", Path.Join(directory, "packages")))))).Save(Path.Join(directory, "NuGet.Config"));
 
         var installedRuntime = Path.TrimEndingDirectorySeparator(RuntimeEnvironment.GetRuntimeDirectory());
-        var installedRoot = Path.GetFullPath(Path.Combine(installedRuntime, "..", "..", ".."));
-        var runtimeOnly = Path.Combine(directory, "runtime-only");
+        var installedRoot = Path.GetFullPath(Path.Join(installedRuntime, "..", "..", ".."));
+        var runtimeOnly = Path.Join(directory, "runtime-only");
         Directory.CreateDirectory(runtimeOnly);
         var muxerName = OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet";
-        var muxer = Path.Combine(runtimeOnly, muxerName);
-        var installedMuxer = Path.Combine(installedRoot, muxerName);
+        var muxer = Path.Join(runtimeOnly, muxerName);
+        var installedMuxer = Path.Join(installedRoot, muxerName);
         File.Copy(installedMuxer, muxer);
         if (OperatingSystem.IsWindows())
         {
@@ -512,16 +512,16 @@ static async Task<bool> SmokeSessionsAsync(string repo, string publishDirectory,
 
         if (!OperatingSystem.IsWindows())
         {
-            File.SetUnixFileMode(muxer, File.GetUnixFileMode(Path.Combine(installedRoot, muxerName)));
+            File.SetUnixFileMode(muxer, File.GetUnixFileMode(Path.Join(installedRoot, muxerName)));
         }
 
-        CopyDirectory(Path.Combine(installedRoot, "host"), Path.Combine(runtimeOnly, "host"));
-        CopyDirectory(installedRuntime, Path.Combine(runtimeOnly, "shared", "Microsoft.NETCore.App",
+        CopyDirectory(Path.Join(installedRoot, "host"), Path.Join(runtimeOnly, "host"));
+        CopyDirectory(installedRuntime, Path.Join(runtimeOnly, "shared", "Microsoft.NETCore.App",
             Path.GetFileName(installedRuntime)));
         var environment = new Dictionary<string, string>
         {
             ["DOTNET_HOST_PATH"] = muxer, ["DOTNET_ROOT"] = runtimeOnly, ["DOTNET_MULTILEVEL_LOOKUP"] = "0",
-            ["PATH"] = runtimeOnly, ["NUGET_PACKAGES"] = Path.Combine(directory, "packages"),
+            ["PATH"] = runtimeOnly, ["NUGET_PACKAGES"] = Path.Join(directory, "packages"),
         };
 
         var sdks = await CaptureAsync(directory, muxer, ["--list-sdks"], cancellationToken, environment);
@@ -536,7 +536,7 @@ static async Task<bool> SmokeSessionsAsync(string repo, string publishDirectory,
                 + "call void System.IO.File::AppendAllText(string, string); "
                 + "ldc.i4 6; ldc.i4 7; call Greeter.Ops::Multiply(int32, int32); "
                 + ".run; .session save example.ilrepl.json --embed"], cancellationToken, environment);
-        var marker = Path.Combine(directory, "executions");
+        var marker = Path.Join(directory, "executions");
         var savedExecutions = File.Exists(marker) ? await File.ReadAllTextAsync(marker, cancellationToken) : "";
         var open = await CaptureAsync(directory, executable,
             ["--no-color", "--batch", "example.ilrepl.json"], cancellationToken, environment);
@@ -604,12 +604,12 @@ static void CopyDirectory(string source, string destination)
     Directory.CreateDirectory(destination);
     foreach (var file in Directory.EnumerateFiles(source))
     {
-        File.Copy(file, Path.Combine(destination, Path.GetFileName(file)));
+        File.Copy(file, Path.Join(destination, Path.GetFileName(file)));
     }
 
     foreach (var directory in Directory.EnumerateDirectories(source))
     {
-        CopyDirectory(directory, Path.Combine(destination, Path.GetFileName(directory)));
+        CopyDirectory(directory, Path.Join(destination, Path.GetFileName(directory)));
     }
 }
 
@@ -624,7 +624,7 @@ static void DeleteRuntimeDirectory(string directory)
         try
         {
             Console.Error.WriteLine($"runtime-only fixture cleanup failed (0x{exception.HResult:X8}): {directory}");
-            var muxer = Path.Combine(directory, "runtime-only", "dotnet.exe");
+            var muxer = Path.Join(directory, "runtime-only", "dotnet.exe");
             if (File.Exists(muxer))
             {
                 Console.Error.WriteLine($"remaining muxer attributes: {File.GetAttributes(muxer)}");
@@ -681,7 +681,7 @@ static string FindRepoRoot()
     var directory = Directory.GetCurrentDirectory();
     while (directory is not null)
     {
-        if (File.Exists(Path.Combine(directory, "IlRepl.slnx")))
+        if (File.Exists(Path.Join(directory, "IlRepl.slnx")))
         {
             return directory;
         }

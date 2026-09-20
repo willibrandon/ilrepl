@@ -66,7 +66,7 @@ public sealed class EditedCustomAttributeMetadataTests
             var context = new AssemblyLoadContext("custom-edit", isCollectible: true);
             try
             {
-                var assembly = context.LoadFromStream(new MemoryStream(image));
+                var assembly = context.LoadImage(image);
                 foreach (var source in new[] { method, alias })
                 {
                     var exported = Exported(assembly, source);

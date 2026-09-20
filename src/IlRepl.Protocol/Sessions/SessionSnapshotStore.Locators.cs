@@ -40,7 +40,7 @@ public static partial class SessionSnapshotStore
     {
         for (var current = new DirectoryInfo(directory); current is not null; current = current.Parent)
         {
-            var git = Path.Combine(current.FullName, ".git");
+            var git = Path.Join(current.FullName, ".git");
             if (Directory.Exists(git) || File.Exists(git))
             {
                 return current.FullName;
@@ -100,6 +100,6 @@ public static partial class SessionSnapshotStore
     {
         var key = reference.Origin + "/" + reference.Identity + "/" + Path.GetFileName(reference.Request)
             + "/" + string.Join('/', reference.Assets.Select(asset => asset.Hash).Order(StringComparer.Ordinal));
-        return Path.Combine(cacheDirectory, "locators", SessionCodec.Hash(Encoding.UTF8.GetBytes(key)) + ".json");
+        return Path.Join(cacheDirectory, "locators", SessionCodec.Hash(Encoding.UTF8.GetBytes(key)) + ".json");
     }
 }

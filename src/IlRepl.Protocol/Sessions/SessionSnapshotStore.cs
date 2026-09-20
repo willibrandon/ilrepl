@@ -15,7 +15,7 @@ public static partial class SessionSnapshotStore
     /// <returns>The absolute associated session path.</returns>
     public static Task<string> WriteAsync(string path, SessionDocument document, bool embed, CancellationToken cancellationToken)
         => WriteAsync(path, document, embed,
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ilrepl", "assets"),
+            Path.Join(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ilrepl", "assets"),
             cancellationToken);
 
     /// <summary>
@@ -55,7 +55,7 @@ public static partial class SessionSnapshotStore
 
         foreach (var asset in document.Assets)
         {
-            await AtomicWriteAsync(Path.Combine(cacheDirectory, asset.Hash), asset.Image, cancellationToken).ConfigureAwait(false);
+            await AtomicWriteAsync(Path.Join(cacheDirectory, asset.Hash), asset.Image, cancellationToken).ConfigureAwait(false);
         }
 
         try

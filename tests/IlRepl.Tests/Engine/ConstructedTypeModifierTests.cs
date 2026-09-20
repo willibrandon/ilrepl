@@ -144,14 +144,16 @@ public sealed class ConstructedTypeModifierTests
 
     private static void AssertField(byte[] image)
     {
-        using var assembly = AssemblyDefinition.ReadAssembly(new MemoryStream(image));
+        using var assemblyStream = new MemoryStream(image);
+        using var assembly = AssemblyDefinition.ReadAssembly(assemblyStream);
         var type = assembly.MainModule.GetType("Holder").Fields.Single().FieldType;
         AssertAnnotatedArgument(type, "IsVolatile");
     }
 
     private static void AssertMemberReferences(byte[] image, string typeName, string methodName, string modifier = "IsVolatile")
     {
-        using var assembly = AssemblyDefinition.ReadAssembly(new MemoryStream(image));
+        using var assemblyStream = new MemoryStream(image);
+        using var assembly = AssemblyDefinition.ReadAssembly(assemblyStream);
         var method = assembly.MainModule.GetType(typeName).Methods.Single(candidate => candidate.Name == methodName);
         var field = (FieldReference)method.Body.Instructions.Single(instruction => instruction.OpCode == OpCodes.Stsfld).Operand;
         var called = (MethodReference)method.Body.Instructions.Single(instruction => instruction.OpCode == OpCodes.Call).Operand;
@@ -189,7 +191,7 @@ public sealed class ConstructedTypeModifierTests
         var context = new AssemblyLoadContext("nested-generic-modifier", isCollectible: true);
         try
         {
-            var assembly = context.LoadFromStream(new MemoryStream(image));
+            var assembly = context.LoadImage(image);
             Assert.AreEqual(7, assembly.GetType("IlRepl.Cell")!.GetMethod("Read")!.Invoke(null, null));
         }
         finally

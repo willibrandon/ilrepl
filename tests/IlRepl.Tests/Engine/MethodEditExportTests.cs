@@ -44,7 +44,7 @@ public sealed class MethodEditExportTests
         try
         {
             var image = IlasmLocator.Assemble(session.ToIlAsm());
-            var assembly = context.LoadFromStream(new MemoryStream(image));
+            var assembly = context.LoadImage(image);
             Assert.AreEqual(42, assembly.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
         }
         finally
@@ -73,7 +73,7 @@ public sealed class MethodEditExportTests
         var context = new AssemblyLoadContext("edited-export", isCollectible: true);
         try
         {
-            var assembly = context.LoadFromStream(new MemoryStream(image));
+            var assembly = context.LoadImage(image);
             Assert.AreEqual(42, assembly.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
             var copied = assembly.GetType(edit.Method!.DeclaringType!.FullName!)!.GetMethod(edit.Method.Name)!;
             Assert.AreEqual(17, copied.Invoke(null, [17, 2]));
@@ -114,7 +114,7 @@ public sealed class MethodEditExportTests
         var context = new AssemblyLoadContext("closure-export", isCollectible: true);
         try
         {
-            var assembly = context.LoadFromStream(new MemoryStream(image));
+            var assembly = context.LoadImage(image);
             Assert.AreEqual(42, assembly.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
             var owner = assembly.GetType(edit.Method!.DeclaringType!.FullName!)!;
             var helper = owner.GetMethod("Add", BindingFlags.NonPublic | BindingFlags.Static)!;

@@ -161,10 +161,10 @@ internal sealed class HostSessionService
                     continue;
                 }
 
-                var directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                var directory = Path.Join(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                     "ilrepl", "native", asset.Hash);
                 Directory.CreateDirectory(directory);
-                var destination = Path.Combine(directory, Path.GetFileName(asset.Name));
+                var destination = Path.Join(directory, Path.GetFileName(asset.Name));
                 if (File.Exists(destination) && new FileInfo(destination).Length == bytes.Length
                     && SessionCodec.Hash(await File.ReadAllBytesAsync(destination, cancellationToken).ConfigureAwait(false)) == asset.Hash)
                 {

@@ -33,7 +33,7 @@ public sealed class SessionInterruptionTests
     {
         var token = TestContext.CancellationToken;
         using var files = new SessionWorkspaceFixture();
-        var release = Path.Combine(files.DirectoryPath, "release");
+        var release = Path.Join(files.DirectoryPath, "release");
         string[] source =
         [
             "ldstr " + LiteralParser.Escape(files.MarkerPath), "ldstr \"entered\"",

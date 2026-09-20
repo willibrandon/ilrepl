@@ -97,7 +97,7 @@ public sealed class PublicHelperContextTests
             context.Resolving += (_, name) => name.Name == assembly.GetName().Name ? assembly : null;
             try
             {
-                var exported = context.LoadFromStream(new MemoryStream(exportedImage));
+                var exported = context.LoadImage(exportedImage);
                 if (shape is "stateless" or "identity")
                 {
                     Assert.Contains(reference => reference.Name == assembly.GetName().Name,

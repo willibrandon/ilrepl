@@ -34,8 +34,8 @@ internal static class NativeWorkerProgram
         var root = arguments[3];
         OwnedProcessGroup.PrepareWorker();
         WorkerOwnerWatchdog.Start();
-        await File.WriteAllTextAsync(Path.Combine(root, "group-ready"), "ready").ConfigureAwait(false);
-        await WaitForAsync(Path.Combine(root, "start")).ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Join(root, "group-ready"), "ready").ConfigureAwait(false);
+        await WaitForAsync(Path.Join(root, "start")).ConfigureAwait(false);
         Console.OutputEncoding = new UTF8Encoding(false);
         Console.InputEncoding = new UTF8Encoding(false);
         Console.Write(NativeOutputBuffer.StartMarker(root));
@@ -53,7 +53,7 @@ internal static class NativeWorkerProgram
             CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo(package.Culture);
             CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo(package.UICulture);
             ComparisonWorker.RestoreFixtures(package.Files);
-            await File.WriteAllTextAsync(Path.Combine(root, "ready"), "ready").ConfigureAwait(false);
+            await File.WriteAllTextAsync(Path.Join(root, "ready"), "ready").ConfigureAwait(false);
             if (options.Info)
             {
                 var probe = CapabilityProbe();
@@ -63,7 +63,7 @@ internal static class NativeWorkerProgram
             }
             else
             {
-                using var context = new NativeWorkerContext(target, options, Path.Combine(root, "native"));
+                using var context = new NativeWorkerContext(target, options, Path.Join(root, "native"));
                 state = state with
                 {
                     MethodId = (ulong)context.Method.MethodHandle.Value,
@@ -81,7 +81,7 @@ internal static class NativeWorkerProgram
                 await NativeStateFile.WriteAsync(root, state).ConfigureAwait(false);
                 context.Prepare();
                 var elapsed = Stopwatch.StartNew();
-                while (options.Run && state.Report.Invocations < options.Iterations && !File.Exists(Path.Combine(root, "stop")))
+                while (options.Run && state.Report.Invocations < options.Iterations && !File.Exists(Path.Join(root, "stop")))
                 {
                     state = state with { Report = state.Report with { Invocations = state.Report.Invocations + 1 } };
                     await NativeStateFile.WriteAsync(root, state).ConfigureAwait(false);
@@ -124,14 +124,14 @@ internal static class NativeWorkerProgram
         }
 
         await NativeStateFile.WriteAsync(root, state).ConfigureAwait(false);
-        await File.WriteAllTextAsync(Path.Combine(root, "work-done"), "done").ConfigureAwait(false);
-        await WaitForAsync(Path.Combine(root, "release")).ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Join(root, "work-done"), "done").ConfigureAwait(false);
+        await WaitForAsync(Path.Join(root, "release")).ConfigureAwait(false);
         return 0;
     }
 
     private static async Task<NativeCompilation[]> AvailableListingsAsync(string root, string[] methodNames)
     {
-        var path = Path.Combine(root, "native.txt");
+        var path = Path.Join(root, "native.txt");
         if (!File.Exists(path))
         {
             return [];
@@ -170,7 +170,7 @@ internal static class NativeWorkerProgram
     {
         var environment = Environment.GetEnvironmentVariables().Cast<DictionaryEntry>()
             .ToDictionary(pair => (string)pair.Key, pair => (string)pair.Value!, StringComparer.Ordinal);
-        var jit = Path.Combine(Path.GetDirectoryName(typeof(object).Assembly.Location)!,
+        var jit = Path.Join(Path.GetDirectoryName(typeof(object).Assembly.Location)!,
             OperatingSystem.IsWindows() ? "clrjit.dll" : OperatingSystem.IsMacOS() ? "libclrjit.dylib" : "libclrjit.so");
         var intrinsics = typeof(Vector128).Assembly.GetTypes().Where(type => type.IsPublic && !type.ContainsGenericParameters &&
             type.Namespace is { } name

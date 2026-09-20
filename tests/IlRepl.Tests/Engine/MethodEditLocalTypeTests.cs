@@ -75,7 +75,8 @@ public sealed class MethodEditLocalTypeTests
         session.AddLine("call Copy");
         foreach (var image in new[] { AssemblyExporter.Write(session, "local-types"), IlasmLocator.Assemble(session.ToIlAsm()) })
         {
-            using var module = ModuleDefinition.ReadModule(new MemoryStream(image));
+            using var moduleStream = new MemoryStream(image);
+            using var module = ModuleDefinition.ReadModule(moduleStream);
             var local = module.GetTypes().Single(type => type.FullName == edit.Method.DeclaringType!.FullName)
                 .Methods.Single(method => method.Name == "Read").Body.Variables.Single().VariableType;
             var referenced = shape switch
@@ -92,7 +93,7 @@ public sealed class MethodEditLocalTypeTests
             var context = new AssemblyLoadContext("local-types-export", isCollectible: true);
             try
             {
-                var exported = context.LoadFromStream(new MemoryStream(image));
+                var exported = context.LoadImage(image);
                 Assert.AreEqual(expected, exported.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
             }
             finally

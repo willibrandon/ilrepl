@@ -105,7 +105,8 @@ public static class SessionAssemblies
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(dependencies);
         var context = new DefinitionLoadContext(name);
-        var assembly = context.LoadFromStream(new MemoryStream(image, writable: false));
+        using var stream = new MemoryStream(image, writable: false);
+        var assembly = context.LoadFromStream(stream);
         var definition = new DefinitionAssembly(assembly, kind, [.. dependencies], context) { Image = image };
         Register(assembly, definition);
         return definition;

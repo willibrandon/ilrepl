@@ -19,7 +19,7 @@ public sealed class FileHistoryStoreTests
     /// </summary>
     public TestContext TestContext { get; set; } = null!;
 
-    private static string TempPath() => Path.Combine(Path.GetTempPath(), "ilrepl-tests", Guid.NewGuid().ToString("N"), "history");
+    private static string TempPath() => Path.Join(Path.GetTempPath(), "ilrepl-tests", Guid.NewGuid().ToString("N"), "history");
 
     /// <summary>
     /// A multi-line entry comes back as it went in.
@@ -131,7 +131,7 @@ public sealed class FileHistoryStoreTests
         var file = TempPath();
         Directory.CreateDirectory(Path.GetDirectoryName(file)!);
         await File.WriteAllTextAsync(file, "a file, not a directory", TestContext.CancellationToken);
-        var store = new FileHistoryStore(Path.Combine(file, "history"));
+        var store = new FileHistoryStore(Path.Join(file, "history"));
         await store.AppendAsync("ldc.i4 1", TestContext.CancellationToken);
         Assert.IsNotNull(store.Problem);
         Assert.IsEmpty((await store.LoadAsync(TestContext.CancellationToken)).Entries);
@@ -300,8 +300,8 @@ public sealed class FileHistoryStoreTests
     [TestMethod]
     public void DefaultPath_HonoursXdgConfigHome()
     {
-        var xdg = Path.Combine(Path.GetTempPath(), "xdg");
-        Assert.AreEqual(Path.Combine(xdg, "ilrepl", "history"), FileHistoryStore.DefaultPath(xdg));
+        var xdg = Path.Join(Path.GetTempPath(), "xdg");
+        Assert.AreEqual(Path.Join(xdg, "ilrepl", "history"), FileHistoryStore.DefaultPath(xdg));
         Assert.DoesNotContain("xdg", FileHistoryStore.DefaultPath(""));
         Assert.DoesNotContain("xdg", FileHistoryStore.DefaultPath(null));
     }
@@ -313,12 +313,12 @@ public sealed class FileHistoryStoreTests
     [TestMethod]
     public async Task DefaultPath_ReadsXdgConfigHomeFromTheEnvironment()
     {
-        var xdg = Path.Combine(Path.GetTempPath(), "xdg-" + Guid.NewGuid().ToString("N"));
+        var xdg = Path.Join(Path.GetTempPath(), "xdg-" + Guid.NewGuid().ToString("N"));
         using var child = StartProbe(new Dictionary<string, string> { [HistoryProbes.Probe] = "path", ["XDG_CONFIG_HOME"] = xdg });
 
         var output = await child.StandardOutput.ReadToEndAsync(TestContext.CancellationToken);
         await child.WaitForExitAsync(TestContext.CancellationToken);
-        Assert.AreEqual(Path.Combine(xdg, "ilrepl", "history"), output.Trim());
+        Assert.AreEqual(Path.Join(xdg, "ilrepl", "history"), output.Trim());
     }
 
     /// <summary>
@@ -328,7 +328,7 @@ public sealed class FileHistoryStoreTests
     [OSCondition(ConditionMode.Include, OperatingSystems.Windows)]
     public void DefaultPath_Windows_UsesLocalApplicationData()
     {
-        Assert.AreEqual(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ilrepl", "history"),
+        Assert.AreEqual(Path.Join(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ilrepl", "history"),
             FileHistoryStore.DefaultPath(null));
     }
 
@@ -339,7 +339,7 @@ public sealed class FileHistoryStoreTests
     [OSCondition(ConditionMode.Exclude, OperatingSystems.Windows)]
     public void DefaultPath_Unix_UsesConfigDirectory()
     {
-        Assert.AreEqual(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config", "ilrepl", "history"),
+        Assert.AreEqual(Path.Join(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config", "ilrepl", "history"),
             FileHistoryStore.DefaultPath(null));
     }
 

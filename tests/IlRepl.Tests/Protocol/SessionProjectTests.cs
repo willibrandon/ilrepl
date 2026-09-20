@@ -41,7 +41,7 @@ public sealed class SessionProjectTests
         Assert.Contains(line => line.PlainText.Contains("loaded project " + project, StringComparison.Ordinal)
             && line.PlainText.Contains("net10.0, " + configuration + ", SDK " + reference.SdkVersion, StringComparison.Ordinal)
             && line.PlainText.Contains(" -> " + reference.Assets[0].Path, StringComparison.Ordinal), loaded.Lines);
-        Assert.AreEqual(File.ReadAllText(Path.Combine(Path.GetDirectoryName(project)!, "sdk-version.txt")).Trim(), reference.SdkVersion);
+        Assert.AreEqual(File.ReadAllText(Path.Join(Path.GetDirectoryName(project)!, "sdk-version.txt")).Trim(), reference.SdkVersion);
         Assert.Contains(asset => asset.Kind == "managed" && asset.Path!.Contains(Path.DirectorySeparatorChar + configuration
             + Path.DirectorySeparatorChar, StringComparison.Ordinal), reference.Assets);
         await AssertValueAsync(controller, fixture.AssemblyName, expected);
@@ -66,7 +66,7 @@ public sealed class SessionProjectTests
 
         Assert.AreEqual(written, File.GetLastWriteTimeUtc(output));
         Assert.AreEqual(before.Assets.Single().Hash, (await CaptureAsync(controller)).References.Single().Assets.Single().Hash);
-        var source = Path.Combine(Path.GetDirectoryName(project)!, "Values.cs");
+        var source = Path.Join(Path.GetDirectoryName(project)!, "Values.cs");
         File.SetLastWriteTimeUtc(source, written.AddMinutes(1));
         var failed = await controller.HandleAsync(".load " + Quote(project) + " --no-build", TestContext.CancellationToken);
 
@@ -112,12 +112,12 @@ public sealed class SessionProjectTests
     public async Task Load_RequiresOneProjectInDirectory(bool ambiguous)
     {
         using var fixture = new SessionDependencyFixture();
-        var directory = Path.Combine(fixture.DirectoryPath, "project with spaces");
+        var directory = Path.Join(fixture.DirectoryPath, "project with spaces");
         Directory.CreateDirectory(directory);
         if (ambiguous)
         {
             var project = fixture.WriteProject();
-            File.Copy(project, Path.Combine(directory, "Second.csproj"));
+            File.Copy(project, Path.Join(directory, "Second.csproj"));
         }
 
         await using var controller = await fixture.StartAsync(TestContext.CancellationToken);
@@ -156,7 +156,7 @@ public sealed class SessionProjectTests
         Assert.Contains("net8.0", diagnostic);
         Assert.Contains("project targets: net10.0", diagnostic);
         Assert.IsEmpty((await CaptureAsync(controller)).References);
-        Assert.IsFalse(Directory.Exists(Path.Combine(Path.GetDirectoryName(project)!, "bin")));
+        Assert.IsFalse(Directory.Exists(Path.Join(Path.GetDirectoryName(project)!, "bin")));
     }
 
     /// <summary>
@@ -192,7 +192,7 @@ public sealed class SessionProjectTests
         Assert.Contains("shared framework " + framework, diagnostic);
         Assert.Contains("Microsoft.NETCore.App", diagnostic);
         Assert.IsEmpty((await CaptureAsync(controller)).References);
-        Assert.IsFalse(Directory.Exists(Path.Combine(Path.GetDirectoryName(project)!, "obj")));
+        Assert.IsFalse(Directory.Exists(Path.Join(Path.GetDirectoryName(project)!, "obj")));
     }
 
     /// <summary>
@@ -239,7 +239,7 @@ public sealed class SessionProjectTests
 
         var before = await CaptureAsync(controller);
         var epoch = controller.AssemblyVersion >> 32;
-        var source = Path.Combine(Path.GetDirectoryName(project)!, "Values.cs");
+        var source = Path.Join(Path.GetDirectoryName(project)!, "Values.cs");
         File.WriteAllText(source, "namespace DependencySamples; public static class Values { public static int Read() => 84; }");
         var reloaded = await controller.HandleAsync(".load " + Quote(project), TestContext.CancellationToken);
         if (committed)
@@ -282,7 +282,7 @@ public sealed class SessionProjectTests
         controller.Editor = new SessionEditor { Lines = ["// keep this draft"], Caret = 7, Anchor = 2, Revision = 8 };
         var before = await CaptureAsync(controller);
         var epoch = controller.AssemblyVersion >> 32;
-        File.WriteAllText(Path.Combine(Path.GetDirectoryName(project)!, "Values.cs"), "this is deliberately invalid C#");
+        File.WriteAllText(Path.Join(Path.GetDirectoryName(project)!, "Values.cs"), "this is deliberately invalid C#");
 
         var failed = await controller.HandleAsync(".load " + Quote(project) + " --reload", TestContext.CancellationToken);
 
@@ -307,7 +307,7 @@ public sealed class SessionProjectTests
     {
         using var fixture = new SessionDependencyFixture();
         var project = fixture.WriteProject();
-        var path = Path.Combine(fixture.DirectoryPath, "sessions", "project.ilrepl.json");
+        var path = Path.Join(fixture.DirectoryPath, "sessions", "project.ilrepl.json");
         await using var controller = await fixture.StartAsync(TestContext.CancellationToken);
         await SubmitAsync(controller, ".load " + Quote(project));
         await SubmitAsync(controller, ".session save " + Quote(path));
@@ -324,9 +324,9 @@ public sealed class SessionProjectTests
         };
 
         await File.WriteAllBytesAsync(path, SessionCodec.Write(saved), TestContext.CancellationToken);
-        var movedDirectory = Path.Combine(fixture.DirectoryPath, "moved project");
+        var movedDirectory = Path.Join(fixture.DirectoryPath, "moved project");
         Directory.Move(Path.GetDirectoryName(project)!, movedDirectory);
-        var moved = Path.Combine(movedDirectory, Path.GetFileName(project));
+        var moved = Path.Join(movedDirectory, Path.GetFileName(project));
         await SubmitAsync(controller, ".session open " + Quote(path));
 
         var missing = await controller.HandleAsync(".session restore --build", TestContext.CancellationToken);

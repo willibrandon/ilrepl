@@ -679,13 +679,10 @@ public sealed partial class Session
             // the closing brace, means a refused redefinition costs nothing to recover from. A
             // dependent keeps the state it was accepted with; it is never parsed again, and a
             // same-signature replacement reaches it through the trampoline it already calls.
-            foreach (var other in _methods)
+            foreach (var other in _methods.Where(other => !ReferenceEquals(other, replacing)))
             {
-                if (!ReferenceEquals(other, replacing))
-                {
-                    RequireCompatibleReferences(other.State, "method " + other.Signature.Name, signature,
-                        "(the previous definition stays)");
-                }
+                RequireCompatibleReferences(other.State, "method " + other.Signature.Name, signature,
+                    "(the previous definition stays)");
             }
 
             RequireCompatibleTypeReferences(signature);
@@ -739,13 +736,10 @@ public sealed partial class Session
 
         if (replacing is not null && !_rebuilding)
         {
-            foreach (var existing in _methods)
+            foreach (var existing in _methods.Where(existing => !ReferenceEquals(existing, replacing)))
             {
-                if (!ReferenceEquals(existing, replacing))
-                {
-                    RequireCompatibleReferences(existing.State, "method " + existing.Signature.Name, open.Signature,
-                        "(the previous definition stays)");
-                }
+                RequireCompatibleReferences(existing.State, "method " + existing.Signature.Name, open.Signature,
+                    "(the previous definition stays)");
             }
 
             RequireCompatibleTypeReferences(open.Signature);

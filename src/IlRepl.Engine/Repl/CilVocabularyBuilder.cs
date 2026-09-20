@@ -29,12 +29,9 @@ public static class CilVocabularyBuilder
     private static CilVocabulary Build()
     {
         var opcodes = new Dictionary<string, CilOperandKind>(StringComparer.Ordinal);
-        foreach (var name in OpcodeTable.Names)
+        foreach (var name in OpcodeTable.Names.Where(name => !OpcodeTable.IsReserved(name)))
         {
-            if (!OpcodeTable.IsReserved(name))
-            {
-                opcodes[name] = Kind(OpcodeTable.BySourceName[name].OperandType);
-            }
+            opcodes[name] = Kind(OpcodeTable.BySourceName[name].OperandType);
         }
 
         opcodes["no."] = CilOperandKind.Integer;

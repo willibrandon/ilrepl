@@ -22,7 +22,7 @@ public sealed class LocalSocketListener : IDisposable
     public LocalSocketListener()
     {
         _directory = SocketDirectory.Create();
-        SocketPath = Path.Combine(_directory, "host.sock");
+        SocketPath = Path.Join(_directory, "host.sock");
         _listener = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
         try
         {

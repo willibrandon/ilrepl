@@ -243,7 +243,7 @@ public sealed class ControlFlowCorpusTests
         Assert.Contains(".method public static method int32 *(int32) Pointer()", il);
         Execute(IlasmLocator.Assemble(il), "IlRepl.Cell", "Run", null);
 
-        var path = Path.Combine(Path.GetTempPath(), "ilrepl-flow-" + Guid.NewGuid().ToString("N") + ".dll");
+        var path = Path.Join(Path.GetTempPath(), "ilrepl-flow-" + Guid.NewGuid().ToString("N") + ".dll");
         try
         {
             session.Save(path);
@@ -284,7 +284,7 @@ public sealed class ControlFlowCorpusTests
         session.AddLine("call int32 ImplicitEndfinally(int32)");
         session.AddLine("ret");
         Execute(IlasmLocator.Assemble(session.ToIlAsm()), "IlRepl.Cell", "Run", null);
-        var path = Path.Combine(Path.GetTempPath(), "ilrepl-flow-" + Guid.NewGuid().ToString("N") + ".dll");
+        var path = Path.Join(Path.GetTempPath(), "ilrepl-flow-" + Guid.NewGuid().ToString("N") + ".dll");
         try
         {
             session.Save(path);

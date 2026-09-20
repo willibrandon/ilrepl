@@ -66,7 +66,7 @@ public sealed class InvocationIdentityComparisonTests
             var context = new AssemblyLoadContext("boundary-identity", isCollectible: true);
             try
             {
-                var assembly = context.LoadFromStream(new MemoryStream(image));
+                var assembly = context.LoadImage(image);
                 Assert.AreEqual(replace || shape == "out" ? 0 : 1, assembly.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
                 var exported = assembly.GetType(edit.Method!.DeclaringType!.FullName!)!.GetMethod(edit.Method.Name)!;
                 await AssertActualReference(exported, shape, replace);

@@ -56,7 +56,7 @@ public sealed class ProcessOutputResourceTests
 
         var edit = core.Session.PrepareEdit("Work", "Copy");
         core.Session.CommitEdit("Copy", edit.Source);
-        var argument = LiteralParser.Escape(Path.Combine(files.DirectoryPath, "worker-"));
+        var argument = LiteralParser.Escape(Path.Join(files.DirectoryPath, "worker-"));
         var request = core.Handle(".jit Work (" + argument + ")");
         Assert.IsTrue(request.Succeeded);
         Assert.IsNotNull(request.NativePackage);

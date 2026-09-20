@@ -27,7 +27,7 @@ public sealed class DependencyCancellationTests
         using var fixture = new SessionDependencyFixture();
         fixture.WritePackage(fixture.AssemblyName, "1.0.0", 42);
         await using var feed = new SessionAuthenticatedFeed(
-            Path.Combine(fixture.FeedPath, fixture.AssemblyName + ".1.0.0.nupkg"), fixture.AssemblyName, "1.0.0")
+            Path.Join(fixture.FeedPath, fixture.AssemblyName + ".1.0.0.nupkg"), fixture.AssemblyName, "1.0.0")
         { HoldPackage = true };
         fixture.UseAuthenticatedFeed(feed);
         await using var controller = await fixture.StartAsync(TestContext.CancellationToken);
@@ -41,7 +41,7 @@ public sealed class DependencyCancellationTests
         await Assert.ThrowsAsync<OperationCanceledException>(() => running.WaitAsync(TimeSpan.FromSeconds(10),
             TestContext.CancellationToken));
         await AssertPreservedAsync(controller, epoch);
-        Assert.IsFalse(File.Exists(Path.Combine(fixture.PackageCachePath, fixture.AssemblyName.ToLowerInvariant(),
+        Assert.IsFalse(File.Exists(Path.Join(fixture.PackageCachePath, fixture.AssemblyName.ToLowerInvariant(),
             "1.0.0", ".nupkg.metadata")));
     }
 
@@ -54,8 +54,8 @@ public sealed class DependencyCancellationTests
     {
         using var fixture = new SessionDependencyFixture();
         var project = fixture.WriteProject();
-        var marker = Path.Combine(fixture.DirectoryPath, "build.pid");
-        var release = Path.Combine(fixture.DirectoryPath, "build.release");
+        var marker = Path.Join(fixture.DirectoryPath, "build.pid");
+        var release = Path.Join(fixture.DirectoryPath, "build.release");
         var xml = XDocument.Load(project);
         xml.Root!.Add(new XElement("UsingTask", new XAttribute("TaskName", "AwaitCancellationGate"),
             new XAttribute("TaskFactory", "RoslynCodeTaskFactory"),

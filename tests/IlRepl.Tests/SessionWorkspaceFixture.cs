@@ -16,12 +16,12 @@ internal sealed class SessionWorkspaceFixture : IDisposable
     /// <summary>
     /// The session filename, including spaces to exercise command and dialog path handling.
     /// </summary>
-    public string SessionPath => Path.Combine(DirectoryPath, "saved experiment.ilrepl.json");
+    public string SessionPath => Path.Join(DirectoryPath, "saved experiment.ilrepl.json");
 
     /// <summary>
     /// The marker created only when the saved instructions execute.
     /// </summary>
-    public string MarkerPath => Path.Combine(DirectoryPath, "executed.txt");
+    public string MarkerPath => Path.Join(DirectoryPath, "executed.txt");
 
     /// <summary>
     /// Creates a document with accepted executable source but no execution attempt.

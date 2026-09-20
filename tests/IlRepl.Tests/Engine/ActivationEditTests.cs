@@ -45,7 +45,7 @@ public sealed partial class ActivationEditTests
             var context = new AssemblyLoadContext("activation-aliases", isCollectible: true);
             try
             {
-                var saved = context.LoadFromStream(new MemoryStream(image));
+                var saved = context.LoadImage(image);
                 Assert.AreEqual(85, saved.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
             }
             finally
@@ -72,9 +72,10 @@ public sealed partial class ActivationEditTests
         var fixture = IlLines.Load(ActivationExamples.Source(overload, nested, true).Split('\n'));
         var original = fixture.PrepareEdit("int32 Activation.Owner::Read(string, string)", "Source").Original.Requested;
         Assert.IsTrue(SessionAssemblies.TryGetDefinition(original.Module.Assembly, out var definition));
-        using var module = ModuleDefinition.ReadModule(new MemoryStream(definition.Image!));
+        using var moduleStream = new MemoryStream(definition.Image!);
+        using var module = ModuleDefinition.ReadModule(moduleStream);
         module.Assembly.Name.Name = "ActivationFixture" + Guid.NewGuid().ToString("N");
-        var path = Path.Combine(Path.GetTempPath(), module.Assembly.Name.Name + ".dll");
+        var path = Path.Join(Path.GetTempPath(), module.Assembly.Name.Name + ".dll");
         module.Write(path);
         try
         {
@@ -137,7 +138,7 @@ public sealed partial class ActivationEditTests
             var context = new AssemblyLoadContext("activation-copy", isCollectible: true);
             try
             {
-                var saved = context.LoadFromStream(new MemoryStream(image));
+                var saved = context.LoadImage(image);
                 Assert.AreEqual(43, saved.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
                 Assert.DoesNotContain(reference => reference.Name == "IlRepl.Engine", saved.GetReferencedAssemblies());
             }

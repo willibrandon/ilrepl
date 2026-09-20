@@ -33,7 +33,7 @@ public sealed class AssemblyCompletionTests
         var name = "IdleType" + Guid.NewGuid().ToString("N");
         var first = WriteFixture(directory, "First", name, 1);
         var second = WriteFixture(directory, "Second", name, 2);
-        var release = Path.Combine(directory, "release");
+        var release = Path.Join(directory, "release");
         await using var engine = remote ? await HostPaths.StartEngineAsync(ct) : (IReplEngine)new InProcessEngine();
         var state = new PromptState(new PromptHistory(), new CilTokenizer(engine.Vocabulary))
         {
@@ -169,7 +169,7 @@ public sealed class AssemblyCompletionTests
         method.Body.Instructions.Add(Instruction.Create(OpCodes.Ldc_I4, value));
         method.Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
         type.Methods.Add(method);
-        var path = Path.Combine(directory, ns + name + ".dll");
+        var path = Path.Join(directory, ns + name + ".dll");
         assembly.Write(path);
         return path;
     }

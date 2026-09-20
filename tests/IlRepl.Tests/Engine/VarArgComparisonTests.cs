@@ -56,7 +56,8 @@ public sealed class VarArgComparisonTests
         il.Emit(OpCodes.Ret);
         ComparisonInstrumentation.Complete(writer, target, entry, original);
 
-        using var module = ModuleDefinition.ReadModule(new MemoryStream(writer.Write()));
+        using var moduleStream = new MemoryStream(writer.Write());
+        using var module = ModuleDefinition.ReadModule(moduleStream);
         var exportedOwner = module.Types.Single(type => type.Name == owner.Name);
         var exportedScenario = exportedOwner.Methods.Single(method => method.Name == "Scenario");
         var observedCall = exportedScenario.Body.Instructions.Select(instruction => instruction.Operand).OfType<MethodReference>().Single();

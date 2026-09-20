@@ -74,13 +74,13 @@ public sealed class SizeOnlyArrayCompletionTests
                 Assert.Contains("use .save for exact metadata", error.Message);
             }
 
-            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".dll");
+            var path = Path.Join(Path.GetTempPath(), Guid.NewGuid() + ".dll");
             var context = new AssemblyLoadContext("size-only-export", isCollectible: true);
             context.Resolving += (_, requested) => requested.Name == assembly.GetName().Name ? assembly : null;
             try
             {
                 session.Save(path);
-                var exported = context.LoadFromStream(new MemoryStream(File.ReadAllBytes(path)));
+                var exported = context.LoadImage(File.ReadAllBytes(path));
                 Assert.AreEqual(expected, exported.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
             }
             finally

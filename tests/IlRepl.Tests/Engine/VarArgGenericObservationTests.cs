@@ -82,7 +82,8 @@ public sealed class VarArgGenericObservationTests
 
         ComparisonInstrumentation.Complete(writer, target, entry);
         var image = writer.Write();
-        using var module = ModuleDefinition.ReadModule(new MemoryStream(image));
+        using var moduleStream = new MemoryStream(image);
+        using var module = ModuleDefinition.ReadModule(moduleStream);
         foreach (var caller in module.Types.Where(type => type.Name.EndsWith("Caller`1", StringComparison.Ordinal)))
         {
             var method = caller.Methods.Single();
@@ -117,7 +118,7 @@ public sealed class VarArgGenericObservationTests
         var context = new AssemblyLoadContext("generic-vararg-contexts", isCollectible: true);
         try
         {
-            var assembly = context.LoadFromStream(new MemoryStream(image));
+            var assembly = context.LoadImage(image);
             foreach (var type in assembly.GetTypes())
             {
                 foreach (var method in type.GetMethods())
@@ -153,7 +154,8 @@ public sealed class VarArgGenericObservationTests
             IlasmLocator.Assemble(session.ToIlAsm()),
         })
         {
-            using var module = ModuleDefinition.ReadModule(new MemoryStream(image));
+            using var moduleStream = new MemoryStream(image);
+            using var module = ModuleDefinition.ReadModule(moduleStream);
             var caller = module.Types.Single(type => type.Name == "Caller`1");
             var method = caller.Methods.Single(member => member.Name == "Run");
             var calls = method.Body.Instructions.Select(instruction => instruction.Operand).OfType<MethodReference>().ToArray();

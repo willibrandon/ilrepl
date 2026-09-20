@@ -179,15 +179,15 @@ public sealed class IlAsmRendererTests
             session.AddLine(line);
         }
 
-        var directory = Path.Combine(Path.GetTempPath(), "ilrepl-tests", Guid.NewGuid().ToString("N"));
+        var directory = Path.Join(Path.GetTempPath(), "ilrepl-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         try
         {
-            var source = Path.Combine(directory, "cell.il");
+            var source = Path.Join(directory, "cell.il");
             File.WriteAllText(source, session.ToIlAsm());
             // Options take a dash: a slash is a path on Unix.
             using var process = Process.Start(new ProcessStartInfo(ilasm,
-                ["-DLL", "-QUIET", "-OUTPUT=" + Path.Combine(directory, "cell.dll"), source])
+                ["-DLL", "-QUIET", "-OUTPUT=" + Path.Join(directory, "cell.dll"), source])
             {
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
@@ -286,7 +286,7 @@ public sealed class IlAsmRendererTests
         var context = new AssemblyLoadContext("ilasm-types", isCollectible: true);
         try
         {
-            var assembly = context.LoadFromStream(new MemoryStream(image));
+            var assembly = context.LoadImage(image);
             Assert.AreEqual(14, assembly.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
         }
         finally
@@ -319,7 +319,7 @@ public sealed class IlAsmRendererTests
         try
         {
             Assert.AreEqual(1,
-                context.LoadFromStream(new MemoryStream(image)).GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
+                context.LoadImage(image).GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
         }
         finally
         {
@@ -347,7 +347,7 @@ public sealed class IlAsmRendererTests
         try
         {
             Assert.AreEqual(11,
-                context.LoadFromStream(new MemoryStream(image)).GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
+                context.LoadImage(image).GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
         }
         finally
         {
@@ -389,7 +389,7 @@ public sealed class IlAsmRendererTests
         try
         {
             Assert.AreEqual(9,
-                context.LoadFromStream(new MemoryStream(image)).GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
+                context.LoadImage(image).GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
         }
         finally
         {
@@ -423,7 +423,7 @@ public sealed class IlAsmRendererTests
         try
         {
             Assert.AreEqual(12,
-                context.LoadFromStream(new MemoryStream(image)).GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
+                context.LoadImage(image).GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
         }
         finally
         {

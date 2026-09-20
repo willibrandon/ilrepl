@@ -69,15 +69,15 @@ public sealed class FileHistoryStore : IHistoryStore
     {
         if (!string.IsNullOrEmpty(xdg))
         {
-            return System.IO.Path.Combine(xdg, "ilrepl", "history");
+            return System.IO.Path.Join(xdg, "ilrepl", "history");
         }
 
         if (OperatingSystem.IsWindows())
         {
-            return System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ilrepl", "history");
+            return System.IO.Path.Join(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ilrepl", "history");
         }
 
-        return System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config", "ilrepl", "history");
+        return System.IO.Path.Join(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config", "ilrepl", "history");
     }
 
     /// <summary>

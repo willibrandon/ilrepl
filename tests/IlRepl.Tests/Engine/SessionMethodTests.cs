@@ -292,7 +292,7 @@ public sealed class SessionMethodTests
     public void Save_WhileMethodOpen_Throws()
     {
         var session = Load("ldc.i4 1", ".method int32 Fib(int32 n) {");
-        var path = Path.Combine(Path.GetTempPath(), "ilrepl-tests", Guid.NewGuid().ToString("N") + ".dll");
+        var path = Path.Join(Path.GetTempPath(), "ilrepl-tests", Guid.NewGuid().ToString("N") + ".dll");
         Assert.Contains("method Fib is still open", Assert.ThrowsExactly<ReplException>(() => session.Save(path)).Message);
         Assert.IsFalse(File.Exists(path));
     }

@@ -37,7 +37,7 @@ public sealed class InstructionModifierTests
         var context = new AssemblyLoadContext("instruction-modifiers", isCollectible: true);
         try
         {
-            var assembly = context.LoadFromStream(new MemoryStream(image));
+            var assembly = context.LoadImage(image);
             Assert.AreEqual(typeof(int), assembly.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
         }
         finally
@@ -48,7 +48,8 @@ public sealed class InstructionModifierTests
 
     private static void AssertOperands(byte[] image)
     {
-        using var definition = AssemblyDefinition.ReadAssembly(new MemoryStream(image));
+        using var definitionStream = new MemoryStream(image);
+        using var definition = AssemblyDefinition.ReadAssembly(definitionStream);
         var run = definition.MainModule.GetType("IlRepl.Cell").Methods.Single(method => method.Name == "Run");
         var newarr = (TypeReference)run.Body.Instructions.Single(instruction => instruction.OpCode == OpCodes.Newarr).Operand;
         var token = (TypeReference)run.Body.Instructions.Single(instruction => instruction.OpCode == OpCodes.Ldtoken).Operand;

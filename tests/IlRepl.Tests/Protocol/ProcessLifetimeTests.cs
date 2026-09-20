@@ -30,7 +30,7 @@ public sealed partial class ProcessLifetimeTests
     {
         var token = TestContext.CancellationToken;
         using var files = new SessionWorkspaceFixture();
-        var release = Path.Combine(files.DirectoryPath, "release");
+        var release = Path.Join(files.DirectoryPath, "release");
         await using var lifetime = new HostProcessLifetime();
         await using var engine = await lifetime.StartAsync(HostPaths.HostAssembly, RepoPaths.Root, cancellationToken: token);
         await SubmitAsync(engine, token, ".class public Keeper {", ".field public static int32 Value", "}",
@@ -126,10 +126,10 @@ public sealed partial class ProcessLifetimeTests
         using var files = new SessionWorkspaceFixture();
         foreach (var file in Directory.EnumerateFiles(AppContext.BaseDirectory))
         {
-            File.CreateSymbolicLink(Path.Combine(files.DirectoryPath, Path.GetFileName(file)), file);
+            File.CreateSymbolicLink(Path.Join(files.DirectoryPath, Path.GetFileName(file)), file);
         }
 
-        var assembly = Path.Combine(files.DirectoryPath, "ilrepl.dll");
+        var assembly = Path.Join(files.DirectoryPath, "ilrepl.dll");
         await using var lifetime = new HostProcessLifetime(assembly);
         await using var engine = await lifetime.StartAsync(HostPaths.HostAssembly, cancellationToken: token);
         await SubmitAsync(engine, token, ".class public Keeper {", ".field public static int32 Value", "}",
@@ -181,9 +181,9 @@ public sealed partial class ProcessLifetimeTests
     {
         var token = TestContext.CancellationToken;
         using var files = new SessionWorkspaceFixture();
-        var hostRecord = Path.Combine(files.DirectoryPath, "host");
-        var descendants = Path.Combine(files.DirectoryPath, "processes");
-        var descendantsReady = Path.Combine(files.DirectoryPath, "descendants.ready");
+        var hostRecord = Path.Join(files.DirectoryPath, "host");
+        var descendants = Path.Join(files.DirectoryPath, "processes");
+        var descendantsReady = Path.Join(files.DirectoryPath, "descendants.ready");
         var start = new ProcessStartInfo(HostLocator.FindDotnet())
         {
             UseShellExecute = false, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true,

@@ -43,7 +43,7 @@ public sealed class MethodEditPrivateTests
         var context = new AssemblyLoadContext("private-export", isCollectible: true);
         try
         {
-            var assembly = context.LoadFromStream(new MemoryStream(image));
+            var assembly = context.LoadImage(image);
             var owner = assembly.GetType(edit.Method.DeclaringType!.FullName!)!;
             Assert.IsTrue(owner.GetMethod("Read", BindingFlags.NonPublic | BindingFlags.Static)!.IsPrivate);
             Assert.AreEqual(2, assembly.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));

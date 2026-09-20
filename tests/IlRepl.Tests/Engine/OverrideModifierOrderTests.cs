@@ -121,7 +121,7 @@ public sealed class OverrideModifierOrderTests
         var context = new AssemblyLoadContext("override-modifier-order", isCollectible: true);
         try
         {
-            var assembly = context.LoadFromStream(new MemoryStream(image));
+            var assembly = context.LoadImage(image);
             var contract = assembly.GetType("ITransform")!;
             var value = Activator.CreateInstance(assembly.GetType("Transform")!);
             Assert.AreEqual(7, contract.GetMethod("Transform")!.Invoke(value, [7]));
@@ -139,7 +139,8 @@ public sealed class OverrideModifierOrderTests
         IReadOnlyList<string> returnModifiers,
         IReadOnlyList<string> parameterModifiers)
     {
-        using var assembly = AssemblyDefinition.ReadAssembly(new MemoryStream(image));
+        using var assemblyStream = new MemoryStream(image);
+        using var assembly = AssemblyDefinition.ReadAssembly(assemblyStream);
         var implementation = assembly.MainModule.GetType("Transform").Methods.Single(method => method.Name == "Apply");
         AssertModifiers(implementation.ReturnType, returnModifiers);
         AssertModifiers(implementation.Parameters.Single().ParameterType, parameterModifiers);

@@ -41,7 +41,7 @@ public sealed class SessionAssemblyTests
         fixture.WritePackage(fixture.AssemblyName, "1.0.0", 10);
         fixture.WritePackage(fixture.AssemblyName, "2.0.0", 20);
         var image = fixture.PackageImage(fixture.AssemblyName, "1.0.0");
-        var path = Path.Combine(fixture.DirectoryPath, fixture.AssemblyName + ".dll");
+        var path = Path.Join(fixture.DirectoryPath, fixture.AssemblyName + ".dll");
         await File.WriteAllBytesAsync(path, image, TestContext.CancellationToken);
         var start = new ProcessStartInfo(Environment.ProcessPath!)
         {
@@ -87,7 +87,7 @@ public sealed class SessionAssemblyTests
         using var fixture = new SessionDependencyFixture();
         fixture.WritePackage(fixture.AssemblyName, "1.0.0", 10);
         fixture.WritePackage(fixture.AssemblyName, "2.0.0", 20);
-        var path = Path.Combine(fixture.DirectoryPath, fixture.AssemblyName + ".dll");
+        var path = Path.Join(fixture.DirectoryPath, fixture.AssemblyName + ".dll");
         await File.WriteAllBytesAsync(path, fixture.PackageImage(fixture.AssemblyName, "2.0.0"), TestContext.CancellationToken);
         await using var controller = await fixture.StartAsync(TestContext.CancellationToken);
         var loaded = await controller.HandleAsync(".load nuget:" + fixture.AssemblyName + ",[1.0.0]", TestContext.CancellationToken);

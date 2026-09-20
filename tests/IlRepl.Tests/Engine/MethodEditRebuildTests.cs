@@ -113,7 +113,7 @@ public sealed class MethodEditRebuildTests
             var context = new AssemblyLoadContext("rebuilt-edit-" + Guid.NewGuid(), isCollectible: true);
             try
             {
-                var exported = context.LoadFromStream(new MemoryStream(image));
+                var exported = context.LoadImage(image);
                 var methods = exported.GetTypes().SelectMany(type => type.GetMethods(
                     BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)).ToArray();
                 Assert.AreEqual(42, methods.Single(method => method.Name == "ReadBox").Invoke(null, null));

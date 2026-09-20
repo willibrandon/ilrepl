@@ -29,7 +29,7 @@ public sealed class NativeWorkerContext : IDisposable
     {
         ArgumentNullException.ThrowIfNull(target);
         ArgumentNullException.ThrowIfNull(options);
-        _nativeDirectory = nativeDirectory ?? Path.Combine(Path.GetTempPath(), "ilrepl-native-assets-" + Guid.NewGuid().ToString("N"));
+        _nativeDirectory = nativeDirectory ?? Path.Join(Path.GetTempPath(), "ilrepl-native-assets-" + Guid.NewGuid().ToString("N"));
         _target = target;
         _options = options;
         Session = new Session { DeferActivation = true };

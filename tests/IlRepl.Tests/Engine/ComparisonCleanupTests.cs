@@ -24,7 +24,7 @@ public sealed class ComparisonCleanupTests
     public async Task Run_LinkedDirectory_DoesNotChangeTheTarget()
     {
         var outside = Directory.CreateTempSubdirectory("ilrepl-cleanup-outside-");
-        var file = Path.Combine(outside.FullName, "data.txt");
+        var file = Path.Join(outside.FullName, "data.txt");
         File.WriteAllText(file, "outside");
         File.SetUnixFileMode(outside.FullName, UnixFileMode.None);
         try
@@ -64,7 +64,7 @@ public sealed class ComparisonCleanupTests
     public async Task Run_RestrictedWorkingDirectory_PreservesTheComparisonOutcome(bool crash)
     {
         var records = Directory.CreateTempSubdirectory("ilrepl-cleanup-records-");
-        var record = Path.Combine(records.FullName, "workers.txt");
+        var record = Path.Join(records.FullName, "workers.txt");
         try
         {
             var session = new Session();
@@ -121,12 +121,12 @@ public sealed class ComparisonCleanupTests
 
     private static void RestoreAndDelete(string work)
     {
-        var locked = Path.Combine(work, "locked");
+        var locked = Path.Join(work, "locked");
         if (Directory.Exists(locked))
         {
             if (OperatingSystem.IsWindows())
             {
-                File.SetAttributes(Path.Combine(locked, "data.txt"), FileAttributes.Normal);
+                File.SetAttributes(Path.Join(locked, "data.txt"), FileAttributes.Normal);
             }
             else
             {

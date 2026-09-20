@@ -50,8 +50,8 @@ public sealed class ComparisonFixturePermissionTests
             {
                 Assert.AreEqual(attributes[captured.Path], captured.Attributes, captured.Path);
                 Assert.AreEqual(modes[captured.Path], captured.UnixMode, captured.Path);
-                Assert.AreEqual(attributes[captured.Path], File.GetAttributes(Path.Combine(fixture.FullName, captured.Path)));
-                Assert.AreEqual(modes[captured.Path], UnixMode(Path.Combine(fixture.FullName, captured.Path)));
+                Assert.AreEqual(attributes[captured.Path], File.GetAttributes(Path.Join(fixture.FullName, captured.Path)));
+                Assert.AreEqual(modes[captured.Path], UnixMode(Path.Join(fixture.FullName, captured.Path)));
             }
 
             Assert.IsTrue(package.Files.Single(file => file.Path == "readonly.txt").Attributes!.Value.HasFlag(FileAttributes.ReadOnly));
@@ -164,7 +164,7 @@ public sealed class ComparisonFixturePermissionTests
                 var captured = package.Files.Single(file => file.Path == path);
                 Assert.IsNull(captured.UnixMode, path);
                 Assert.IsTrue(captured.Attributes!.Value.HasFlag(FileAttributes.ReparsePoint), path);
-                Assert.AreEqual(File.GetAttributes(Path.Combine(fixture.FullName, path)), captured.Attributes, path);
+                Assert.AreEqual(File.GetAttributes(Path.Join(fixture.FullName, path)), captured.Attributes, path);
             }
 
             Assert.AreEqual("absent.txt", package.Files.Single(file => file.Path == "missing.txt").LinkTarget);
@@ -174,7 +174,7 @@ public sealed class ComparisonFixturePermissionTests
             {
                 var mode = ComparisonFixturePermissionExamples.Mode("readonly.txt");
                 Assert.AreEqual(mode, package.Files.Single(file => file.Path == "readonly.txt").UnixMode);
-                Assert.AreEqual(mode, File.GetUnixFileMode(Path.Combine(fixture.FullName, "alias.txt")));
+                Assert.AreEqual(mode, File.GetUnixFileMode(Path.Join(fixture.FullName, "alias.txt")));
                 expected.Add(((int)mode).ToString(CultureInfo.InvariantCulture));
             }
 
@@ -191,10 +191,10 @@ public sealed class ComparisonFixturePermissionTests
 
                 AssertRemovedWorkingDirectory(result);
                 AssertSource(fixture.FullName, attributes, modes);
-                Assert.AreEqual("readonly.txt", new FileInfo(Path.Combine(fixture.FullName, "alias.txt")).LinkTarget);
-                Assert.AreEqual("absent.txt", new FileInfo(Path.Combine(fixture.FullName, "missing.txt")).LinkTarget);
-                Assert.AreEqual("nested", new DirectoryInfo(Path.Combine(fixture.FullName, "alias-dir")).LinkTarget);
-                Assert.AreEqual("absent-dir", new DirectoryInfo(Path.Combine(fixture.FullName, "missing-dir")).LinkTarget);
+                Assert.AreEqual("readonly.txt", new FileInfo(Path.Join(fixture.FullName, "alias.txt")).LinkTarget);
+                Assert.AreEqual("absent.txt", new FileInfo(Path.Join(fixture.FullName, "missing.txt")).LinkTarget);
+                Assert.AreEqual("nested", new DirectoryInfo(Path.Join(fixture.FullName, "alias-dir")).LinkTarget);
+                Assert.AreEqual("absent-dir", new DirectoryInfo(Path.Join(fixture.FullName, "missing-dir")).LinkTarget);
             }
         }
         finally
@@ -207,22 +207,22 @@ public sealed class ComparisonFixturePermissionTests
     private static DirectoryInfo CreateFixture(bool links = false)
     {
         var fixture = Directory.CreateTempSubdirectory("ilrepl-fixture-permissions-");
-        Directory.CreateDirectory(Path.Combine(fixture.FullName, "nested"));
-        Directory.CreateDirectory(Path.Combine(fixture.FullName, "empty"));
-        File.WriteAllText(Path.Combine(fixture.FullName, "nested", "data.txt"), "seed");
-        File.WriteAllText(Path.Combine(fixture.FullName, "readonly.txt"), "unchanged");
-        File.WriteAllText(Path.Combine(fixture.FullName, "tool.sh"), "#!/bin/sh\nexit 0\n");
+        Directory.CreateDirectory(Path.Join(fixture.FullName, "nested"));
+        Directory.CreateDirectory(Path.Join(fixture.FullName, "empty"));
+        File.WriteAllText(Path.Join(fixture.FullName, "nested", "data.txt"), "seed");
+        File.WriteAllText(Path.Join(fixture.FullName, "readonly.txt"), "unchanged");
+        File.WriteAllText(Path.Join(fixture.FullName, "tool.sh"), "#!/bin/sh\nexit 0\n");
         if (links)
         {
-            File.CreateSymbolicLink(Path.Combine(fixture.FullName, "alias.txt"), "readonly.txt");
-            File.CreateSymbolicLink(Path.Combine(fixture.FullName, "missing.txt"), "absent.txt");
-            Directory.CreateSymbolicLink(Path.Combine(fixture.FullName, "alias-dir"), "nested");
-            Directory.CreateSymbolicLink(Path.Combine(fixture.FullName, "missing-dir"), "absent-dir");
+            File.CreateSymbolicLink(Path.Join(fixture.FullName, "alias.txt"), "readonly.txt");
+            File.CreateSymbolicLink(Path.Join(fixture.FullName, "missing.txt"), "absent.txt");
+            Directory.CreateSymbolicLink(Path.Join(fixture.FullName, "alias-dir"), "nested");
+            Directory.CreateSymbolicLink(Path.Join(fixture.FullName, "missing-dir"), "absent-dir");
         }
 
         foreach (var path in ComparisonFixturePermissionExamples.Paths.Concat(links ? LinkPaths : []).Reverse())
         {
-            var fullPath = Path.Combine(fixture.FullName, path);
+            var fullPath = Path.Join(fixture.FullName, path);
             var attributes = File.GetAttributes(fullPath);
             FileSystemInfo entry = attributes.HasFlag(FileAttributes.Directory) ? new DirectoryInfo(fullPath) : new FileInfo(fullPath);
             entry.CreationTimeUtc = ComparisonFixtureTimeExamples.Timestamp;
@@ -243,10 +243,10 @@ public sealed class ComparisonFixturePermissionTests
     }
 
     private static Dictionary<string, FileAttributes> Attributes(string root) => ComparisonFixturePermissionExamples.Paths
-        .ToDictionary(path => path, path => File.GetAttributes(Path.Combine(root, path)), StringComparer.Ordinal);
+        .ToDictionary(path => path, path => File.GetAttributes(Path.Join(root, path)), StringComparer.Ordinal);
 
     private static Dictionary<string, UnixFileMode?> Modes(string root) => ComparisonFixturePermissionExamples.Paths
-        .ToDictionary(path => path, path => UnixMode(Path.Combine(root, path)), StringComparer.Ordinal);
+        .ToDictionary(path => path, path => UnixMode(Path.Join(root, path)), StringComparer.Ordinal);
 
     private static UnixFileMode? UnixMode(string path) => OperatingSystem.IsWindows() ? null : File.GetUnixFileMode(path);
 
@@ -257,13 +257,13 @@ public sealed class ComparisonFixturePermissionTests
     {
         foreach (var path in ComparisonFixturePermissionExamples.Paths)
         {
-            Assert.AreEqual(attributes[path], File.GetAttributes(Path.Combine(root, path)), path);
-            Assert.AreEqual(modes[path], UnixMode(Path.Combine(root, path)), path);
+            Assert.AreEqual(attributes[path], File.GetAttributes(Path.Join(root, path)), path);
+            Assert.AreEqual(modes[path], UnixMode(Path.Join(root, path)), path);
         }
 
-        Assert.AreEqual("seed", File.ReadAllText(Path.Combine(root, "nested", "data.txt")));
-        Assert.AreEqual("unchanged", File.ReadAllText(Path.Combine(root, "readonly.txt")));
-        Assert.AreEqual("#!/bin/sh\nexit 0\n", File.ReadAllText(Path.Combine(root, "tool.sh")));
+        Assert.AreEqual("seed", File.ReadAllText(Path.Join(root, "nested", "data.txt")));
+        Assert.AreEqual("unchanged", File.ReadAllText(Path.Join(root, "readonly.txt")));
+        Assert.AreEqual("#!/bin/sh\nexit 0\n", File.ReadAllText(Path.Join(root, "tool.sh")));
     }
 
     private static void AssertRemovedWorkingDirectory(ComparisonReply result)
@@ -281,7 +281,7 @@ public sealed class ComparisonFixturePermissionTests
     {
         foreach (var path in ComparisonFixturePermissionExamples.Paths)
         {
-            var fullPath = Path.Combine(root, path);
+            var fullPath = Path.Join(root, path);
             if (!File.Exists(fullPath) && !Directory.Exists(fullPath))
             {
                 continue;

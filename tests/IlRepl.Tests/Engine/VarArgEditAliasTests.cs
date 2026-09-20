@@ -65,7 +65,8 @@ public sealed class VarArgEditAliasTests
         session.AddLine("call " + reference);
         foreach (var exportedImage in new[] { AssemblyExporter.Write(session, "vararg-alias"), IlasmLocator.Assemble(session.ToIlAsm()) })
         {
-            using var module = ModuleDefinition.ReadModule(new MemoryStream(exportedImage));
+            using var moduleStream = new MemoryStream(exportedImage);
+            using var module = ModuleDefinition.ReadModule(moduleStream);
             var call = module.Types.Single(type => type.FullName == "IlRepl.Cell").Methods.Single(method => method.Name == "Run")
                 .Body.Instructions.Select(instruction => instruction.Operand).OfType<MethodReference>()
                 .Single(method => method.Name == "Read");
@@ -84,8 +85,8 @@ public sealed class VarArgEditAliasTests
                 var context = new AssemblyLoadContext("vararg-alias-export", isCollectible: true);
                 try
                 {
-                    context.LoadFromStream(new MemoryStream(image));
-                    var exported = context.LoadFromStream(new MemoryStream(exportedImage));
+                    context.LoadImage(image);
+                    var exported = context.LoadImage(exportedImage);
                     Assert.AreEqual(41 + optionalCount, exported.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
                 }
                 finally

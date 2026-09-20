@@ -29,8 +29,8 @@ public sealed class HostProcessCleanupTests
         var token = TestContext.CancellationToken;
         using var fixture = new SessionDependencyFixture();
         fixture.WritePackage(fixture.AssemblyName, "1.0.0", 42);
-        var directory = Directory.CreateDirectory(Path.Combine(fixture.DirectoryPath, "working")).FullName;
-        var image = Path.Combine(directory, fixture.AssemblyName + ".dll");
+        var directory = Directory.CreateDirectory(Path.Join(fixture.DirectoryPath, "working")).FullName;
+        var image = Path.Join(directory, fixture.AssemblyName + ".dll");
         await File.WriteAllBytesAsync(image, fixture.PackageImage(fixture.AssemblyName, "1.0.0"), token);
         await using var engine = await HostProcessEngine.StartAsync(HostPaths.HostAssembly, directory, null, token);
         using var process = Process.GetProcessById(engine.ProcessId);

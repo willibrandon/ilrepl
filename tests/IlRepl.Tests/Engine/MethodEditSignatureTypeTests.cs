@@ -62,7 +62,8 @@ public sealed class MethodEditSignatureTypeTests
         session.AddLine("call Copy");
         foreach (var image in new[] { AssemblyExporter.Write(session, "signature-types"), IlasmLocator.Assemble(session.ToIlAsm()) })
         {
-            using var module = ModuleDefinition.ReadModule(new MemoryStream(image));
+            using var moduleStream = new MemoryStream(image);
+            using var module = ModuleDefinition.ReadModule(moduleStream);
             var owner = module.GetTypes().Single(type => type.FullName == edit.Method.DeclaringType!.FullName);
             var signatures = owner.Fields.Select(field => field.FieldType)
                 .Concat(owner.Properties.Select(property => property.PropertyType))
@@ -80,7 +81,7 @@ public sealed class MethodEditSignatureTypeTests
             var context = new AssemblyLoadContext("signature-types-export", isCollectible: true);
             try
             {
-                var exported = context.LoadFromStream(new MemoryStream(image));
+                var exported = context.LoadImage(image);
                 Assert.AreEqual(42, exported.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
             }
             finally
@@ -116,7 +117,7 @@ public sealed class MethodEditSignatureTypeTests
             var context = new AssemblyLoadContext("introduced-modifier-export", isCollectible: true);
             try
             {
-                var exported = context.LoadFromStream(new MemoryStream(image));
+                var exported = context.LoadImage(image);
                 var method = exported.GetType(edit.Method!.DeclaringType!.FullName!)!.GetMethod("Read")!;
                 var parameter = returned ? method.ReturnParameter : method.GetParameters().Single();
                 var modifier = parameter.GetOptionalCustomModifiers().Single();

@@ -26,7 +26,7 @@ public sealed class EngineCancellationTests
         var ct = TestContext.CancellationToken;
         await using var engine = new InProcessEngine();
         var mark = engine.Status.Mark;
-        var prefix = Path.Combine(Path.GetTempPath(), "ilrepl-cancel-gate-" + Guid.NewGuid().ToString("N"));
+        var prefix = Path.Join(Path.GetTempPath(), "ilrepl-cancel-gate-" + Guid.NewGuid().ToString("N"));
         var started = prefix + ".started";
         var release = prefix + ".release";
         var startedLiteral = started.Replace("\\", "\\\\", StringComparison.Ordinal);

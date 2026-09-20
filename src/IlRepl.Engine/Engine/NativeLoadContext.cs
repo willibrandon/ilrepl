@@ -34,7 +34,7 @@ internal sealed class NativeLoadContext : AssemblyLoadContext
             }
 
             Directory.CreateDirectory(nativeDirectory);
-            var path = Path.Combine(nativeDirectory, library.Name);
+            var path = Path.Join(nativeDirectory, library.Name);
             if (!_native.TryAdd(library.Name, path))
             {
                 throw new ReplException("duplicate native library: " + library.Name);
@@ -79,7 +79,7 @@ internal sealed class NativeLoadContext : AssemblyLoadContext
         if (!_images.TryGetValue(assemblyName.FullName, out var captured))
         {
             var framework = Path.GetDirectoryName(typeof(object).Assembly.Location)!;
-            if (File.Exists(Path.Combine(framework, assemblyName.Name + ".dll")))
+            if (File.Exists(Path.Join(framework, assemblyName.Name + ".dll")))
             {
                 var shared = Default.LoadFromAssemblyName(assemblyName);
                 if (Path.GetDirectoryName(shared.Location) == framework)

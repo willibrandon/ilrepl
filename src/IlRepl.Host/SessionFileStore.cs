@@ -15,7 +15,7 @@ public sealed partial class SessionFileStore
     /// <param name="cacheDirectory">The asset cache, or null for the user's ilrepl cache.</param>
     public SessionFileStore(string? cacheDirectory = null)
     {
-        _cacheDirectory = cacheDirectory ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        _cacheDirectory = cacheDirectory ?? Path.Join(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "ilrepl", "assets");
     }
 
@@ -54,7 +54,7 @@ public sealed partial class SessionFileStore
                 continue;
             }
 
-            foreach (var candidate in new[] { Path.Combine(_cacheDirectory, asset.Hash), asset.Path })
+            foreach (var candidate in new[] { Path.Join(_cacheDirectory, asset.Hash), asset.Path })
             {
                 if (candidate is null || !File.Exists(candidate))
                 {

@@ -37,7 +37,7 @@ public sealed class SessionActivationTests
     [TestMethod]
     public void CompiledVersion_DefersDelegateCreationAndModuleInitialization()
     {
-        var marker = Path.Combine(Path.GetTempPath(), "ilrepl-activation-" + Guid.NewGuid().ToString("N"));
+        var marker = Path.Join(Path.GetTempPath(), "ilrepl-activation-" + Guid.NewGuid().ToString("N"));
         var image = ModuleInitializerFixture.Create(true, marker);
         var definition = SessionAssemblies.Load(image, "activation-" + Guid.NewGuid().ToString("N"), SessionAssemblyKind.Methods, []);
         try
@@ -116,7 +116,7 @@ public sealed class SessionActivationTests
     [TestMethod]
     public void Run_DefersTypeAndInstanceConstructorsThroughInspectionAndExport()
     {
-        var marker = Path.Combine(Path.GetTempPath(), "ilrepl-constructors-" + Guid.NewGuid().ToString("N"));
+        var marker = Path.Join(Path.GetTempPath(), "ilrepl-constructors-" + Guid.NewGuid().ToString("N"));
         try
         {
             var session = new Session { DeferActivation = true };
@@ -169,7 +169,7 @@ public sealed class SessionActivationTests
     [TestMethod]
     public void Run_DefersImportedEditModuleInitialization()
     {
-        var marker = Path.Combine(Path.GetTempPath(), "ilrepl-edit-activation-" + Guid.NewGuid().ToString("N"));
+        var marker = Path.Join(Path.GetTempPath(), "ilrepl-edit-activation-" + Guid.NewGuid().ToString("N"));
         try
         {
             var session = new Session { DeferActivation = true };

@@ -36,7 +36,8 @@ public sealed class CallingConventionEditTests
         var definitions = family.Write(writer);
         var selected = (MethodDefinition)definitions[family.Selected.Method];
         var image = writer.Write();
-        using var module = ModuleDefinition.ReadModule(new MemoryStream(image));
+        using var moduleStream = new MemoryStream(image);
+        using var module = ModuleDefinition.ReadModule(moduleStream);
         var saved = (MethodDefinition)module.LookupToken(selected.MetadataToken);
         Assert.AreEqual(originalVararg ? MethodCallingConvention.Default : MethodCallingConvention.VarArg, saved.CallingConvention);
         Assert.IsFalse(saved.HasThis);
@@ -88,13 +89,14 @@ public sealed class CallingConventionEditTests
 
         foreach (var image in new[] { AssemblyExporter.Write(session, "convention-edit"), IlasmLocator.Assemble(session.ToIlAsm()) })
         {
-            using var module = ModuleDefinition.ReadModule(new MemoryStream(image));
+            using var moduleStream = new MemoryStream(image);
+            using var module = ModuleDefinition.ReadModule(moduleStream);
             var selected = module.GetType("IlRepl.Edits.Copy.Owner").Methods.Single(method => method.Name == "Read");
             Assert.AreEqual(originalVararg ? MethodCallingConvention.Default : MethodCallingConvention.VarArg, selected.CallingConvention);
             var context = new AssemblyLoadContext("convention-edit", isCollectible: true);
             try
             {
-                var saved = context.LoadFromStream(new MemoryStream(image));
+                var saved = context.LoadImage(image);
                 Assert.AreEqual(expected, saved.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
             }
             finally

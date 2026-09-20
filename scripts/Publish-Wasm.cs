@@ -35,7 +35,7 @@ root.SetAction(async (parseResult, cancellationToken) =>
     var repo = FindRepoRoot();
     var configuration = parseResult.GetValue(configurationOption)!;
     var output = Path.GetFullPath(parseResult.GetValue(outputOption)!, repo);
-    var project = Path.Combine(repo, "src", "IlRepl.Wasm", "IlRepl.Wasm.csproj");
+    var project = Path.Join(repo, "src", "IlRepl.Wasm", "IlRepl.Wasm.csproj");
 
     var publish = new ProcessStartInfo("dotnet") { WorkingDirectory = repo, UseShellExecute = false };
     foreach (var argument in new[] { "publish", project, "-c", configuration, "--nologo", "-v", "quiet" })
@@ -58,26 +58,26 @@ root.SetAction(async (parseResult, cancellationToken) =>
         }
     }
 
-    var wwwroot = Path.Combine(repo, "src", "IlRepl.Wasm", "bin", configuration, "net10.0", "publish", "wwwroot");
+    var wwwroot = Path.Join(repo, "src", "IlRepl.Wasm", "bin", configuration, "net10.0", "publish", "wwwroot");
     if (Directory.Exists(output))
     {
         Directory.Delete(output, recursive: true);
     }
 
-    var bundle = Path.Combine(output, "bundle");
-    var framework = Path.Combine(bundle, "_framework");
+    var bundle = Path.Join(output, "bundle");
+    var framework = Path.Join(bundle, "_framework");
     Directory.CreateDirectory(framework);
 
     // GitHub Pages serves files as they are, so the pre-compressed variants only add weight.
     var copied = 0;
-    foreach (var file in Directory.EnumerateFiles(Path.Combine(wwwroot, "_framework"), "*", SearchOption.AllDirectories))
+    foreach (var file in Directory.EnumerateFiles(Path.Join(wwwroot, "_framework"), "*", SearchOption.AllDirectories))
     {
         if (file.EndsWith(".gz", StringComparison.Ordinal) || file.EndsWith(".br", StringComparison.Ordinal))
         {
             continue;
         }
 
-        File.Copy(file, Path.Combine(framework, Path.GetFileName(file)), overwrite: true);
+        File.Copy(file, Path.Join(framework, Path.GetFileName(file)), overwrite: true);
         copied++;
     }
 
@@ -85,15 +85,15 @@ root.SetAction(async (parseResult, cancellationToken) =>
         ? PageFiles.Names.Append("conformance-worker.js") : PageFiles.Names;
     foreach (var name in pageFiles)
     {
-        File.Copy(Path.Combine(wwwroot, name), Path.Combine(bundle, name), overwrite: true);
+        File.Copy(Path.Join(wwwroot, name), Path.Join(bundle, name), overwrite: true);
     }
 
     // The Greeter sample sits beside the page; the worker fetches it into the runtime's file
     // system so .load has an assembly to read in the browser.
-    var samples = Path.Combine(bundle, "samples");
+    var samples = Path.Join(bundle, "samples");
     Directory.CreateDirectory(samples);
-    var sample = Path.Combine(repo, "samples", "Greeter", "bin", configuration, "net10.0", "Greeter.dll");
-    File.Copy(sample, Path.Combine(samples, "Greeter.dll"), overwrite: true);
+    var sample = Path.Join(repo, "samples", "Greeter", "bin", configuration, "net10.0", "Greeter.dll");
+    File.Copy(sample, Path.Join(samples, "Greeter.dll"), overwrite: true);
 
     // Version the complete import graph, including dotnet.js and its embedded assembly manifest.
     // A page refresh cannot reliably invalidate the HTTP cache used by module workers.
@@ -106,9 +106,9 @@ root.SetAction(async (parseResult, cancellationToken) =>
     }
 
     var directory = "assets/" + Convert.ToHexStringLower(hash.GetHashAndReset());
-    Directory.CreateDirectory(Path.Combine(output, "assets"));
-    Directory.Move(bundle, Path.Combine(output, directory));
-    await using var manifest = File.Create(Path.Combine(output, "asset-manifest.json"));
+    Directory.CreateDirectory(Path.Join(output, "assets"));
+    Directory.Move(bundle, Path.Join(output, directory));
+    await using var manifest = File.Create(Path.Join(output, "asset-manifest.json"));
     await using var json = new Utf8JsonWriter(manifest);
     json.WriteStartObject();
     json.WriteString("directory", directory);
@@ -126,7 +126,7 @@ static string FindRepoRoot()
     var directory = Directory.GetCurrentDirectory();
     while (directory is not null)
     {
-        if (File.Exists(Path.Combine(directory, "IlRepl.slnx")))
+        if (File.Exists(Path.Join(directory, "IlRepl.slnx")))
         {
             return directory;
         }

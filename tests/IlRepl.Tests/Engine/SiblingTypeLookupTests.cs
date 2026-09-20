@@ -75,7 +75,7 @@ public sealed partial class SiblingTypeLookupTests
         string flow,
         string? directory = null)
     {
-        var path = Path.Combine(directory ?? Path.GetTempPath(), "sibling-" + Guid.NewGuid().ToString("N") + ".dll");
+        var path = Path.Join(directory ?? Path.GetTempPath(), "sibling-" + Guid.NewGuid().ToString("N") + ".dll");
         try
         {
             var session = new Session();
@@ -201,7 +201,7 @@ public sealed partial class SiblingTypeLookupTests
         var context = new AssemblyLoadContext("sibling-copy", isCollectible: true);
         try
         {
-            var assembly = context.LoadFromStream(new MemoryStream(image));
+            var assembly = context.LoadImage(image);
             Assert.AreEqual(43, assembly.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
         }
         finally

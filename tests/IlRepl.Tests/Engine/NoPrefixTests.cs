@@ -88,7 +88,8 @@ public sealed class NoPrefixTests
         // An open generic body can be exported before CoreCLR prepares a concrete instantiation.
         var authored = IlLines.Load(".class public GenericPrefix {", ".method public static int32 Read<T>(int32[] values) {",
             ".locals ()", ".maxstack 8", "ldarg.0", "ldc.i4.0", prefix, "ldelema int32", "ldind.i4", "ret", "}", "}");
-        using var oracle = ModuleDefinition.ReadModule(new MemoryStream(independent));
+        using var oracleStream = new MemoryStream(independent);
+        using var oracle = ModuleDefinition.ReadModule(oracleStream);
         var expected = oracle.Types.Single(type => type.Name == "Fixture").Methods.Single();
         foreach (var image in new[]
         {
@@ -96,7 +97,8 @@ public sealed class NoPrefixTests
             IlasmLocator.Assemble(IlAsmRenderer.Render(authored)),
         })
         {
-            using var module = ModuleDefinition.ReadModule(new MemoryStream(image));
+            using var moduleStream = new MemoryStream(image);
+            using var module = ModuleDefinition.ReadModule(moduleStream);
             var methods = module.Types.SelectMany(type => type.Methods).Where(method => method.Name == "Read").ToArray();
             Assert.IsNotEmpty(methods);
             foreach (var method in methods)
@@ -107,7 +109,7 @@ public sealed class NoPrefixTests
             var context = new AssemblyLoadContext("no-prefix-" + Guid.NewGuid(), isCollectible: true);
             try
             {
-                var loaded = context.LoadFromStream(new MemoryStream(image));
+                var loaded = context.LoadImage(image);
                 foreach (var method in loaded.GetTypes().SelectMany(type => type.GetMethods(
                     BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)).Where(method => method.Name == "Read"))
                 {

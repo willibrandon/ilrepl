@@ -296,8 +296,8 @@ public sealed class TypeIndexTests
         var second = new AssemblyLoadContext("index-second", isCollectible: true);
         try
         {
-            var a = first.LoadFromStream(new MemoryStream(image));
-            var b = second.LoadFromStream(new MemoryStream(image));
+            var a = first.LoadImage(image);
+            var b = second.LoadImage(image);
             var sourceA = AssemblySymbolSource.For(a)!;
             var sourceB = AssemblySymbolSource.For(b)!;
             var entryA = sourceA.Index.Entries.Single(e => e.Name == "Fixture");

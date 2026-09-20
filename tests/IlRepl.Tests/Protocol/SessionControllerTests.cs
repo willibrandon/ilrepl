@@ -294,9 +294,9 @@ public sealed class SessionControllerTests
         var directory = Directory.CreateTempSubdirectory("ilrepl-controller-save-").FullName;
         try
         {
-            var originalPath = Path.Combine(directory, "original.ilrepl.json");
-            var incomingPath = Path.Combine(directory, "incoming.ilrepl.json");
-            var store = new SessionFileStore(Path.Combine(directory, "cache"));
+            var originalPath = Path.Join(directory, "original.ilrepl.json");
+            var incomingPath = Path.Join(directory, "incoming.ilrepl.json");
+            var store = new SessionFileStore(Path.Join(directory, "cache"));
             await store.WriteAsync(incomingPath, Document("ldc.i4.2"), false, token);
             await using var controller = new SessionController(await HostPaths.StartEngineAsync(token),
                 static async cancellation => await HostPaths.StartEngineAsync(cancellation));
@@ -377,7 +377,7 @@ public sealed class SessionControllerTests
     {
         var token = TestContext.CancellationToken;
         var initial = new InProcessEngine();
-        var path = Path.Combine(Path.GetTempPath(), "ilrepl-associated-" + Guid.NewGuid().ToString("N") + ".ilrepl.json");
+        var path = Path.Join(Path.GetTempPath(), "ilrepl-associated-" + Guid.NewGuid().ToString("N") + ".ilrepl.json");
         if (associated)
         {
             await initial.SessionAsync(new SessionRequest
@@ -441,7 +441,7 @@ public sealed class SessionControllerTests
     {
         var token = TestContext.CancellationToken;
         var initial = new InProcessEngine();
-        var path = Path.Combine(Path.GetTempPath(), "ilrepl-run-" + Guid.NewGuid().ToString("N") + ".ilrepl.json");
+        var path = Path.Join(Path.GetTempPath(), "ilrepl-run-" + Guid.NewGuid().ToString("N") + ".ilrepl.json");
         await initial.SessionAsync(new SessionRequest
         {
             Action = new SessionAction { Operation = SessionOperation.Hydrate, Path = path },
@@ -469,7 +469,7 @@ public sealed class SessionControllerTests
     {
         var token = TestContext.CancellationToken;
         var directory = Directory.CreateTempSubdirectory("ilrepl-controller-checkpoint-").FullName;
-        var marker = Path.Combine(directory, "marker");
+        var marker = Path.Join(directory, "marker");
         try
         {
             await using var controller = CreateController();

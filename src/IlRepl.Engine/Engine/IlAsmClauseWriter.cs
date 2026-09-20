@@ -22,12 +22,9 @@ public static class IlAsmClauseWriter
         ArgumentNullException.ThrowIfNull(method);
         var layout = ClauseLayout.Build(method.Clauses, method.CodeSize, fold: false);
         var targets = new HashSet<int>(layout.ReferencedOffsets);
-        foreach (var entry in method.Entries)
+        foreach (var entry in method.Entries.Where(entry => entry.Kind == DisassembledEntryKind.Label))
         {
-            if (entry.Kind == DisassembledEntryKind.Label)
-            {
-                targets.Add(entry.Offset);
-            }
+            targets.Add(entry.Offset);
         }
 
         var sb = new StringBuilder();

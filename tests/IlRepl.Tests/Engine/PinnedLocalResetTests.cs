@@ -56,7 +56,7 @@ public sealed class PinnedLocalResetTests
             var context = new AssemblyLoadContext("pinned-reset-" + Guid.NewGuid(), isCollectible: true);
             try
             {
-                var assembly = context.LoadFromStream(new MemoryStream(image));
+                var assembly = context.LoadImage(image);
                 var method = assembly.GetTypes().SelectMany(type => type.GetMethods(
                     BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static))
                     .Single(method => method.Name == "Read");

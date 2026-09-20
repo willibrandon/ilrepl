@@ -1997,12 +1997,9 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
         IEnumerable<int> handlers)
     {
         var result = pending is null ? [] : new List<int>(pending);
-        foreach (var handler in handlers)
+        foreach (var handler in handlers.Where(handler => !result.Contains(handler)))
         {
-            if (!result.Contains(handler))
-            {
-                result.Add(handler);
-            }
+            result.Add(handler);
         }
 
         return result.Count == 0 ? null : result;

@@ -20,19 +20,19 @@ internal static class RepoPaths
     /// <summary>
     /// The directory of the transcript samples.
     /// </summary>
-    public static string Transcripts => Path.Combine(Root, "samples", "Transcripts");
+    public static string Transcripts => Path.Join(Root, "samples", "Transcripts");
 
     /// <summary>
     /// The front-end assembly in the test output.
     /// </summary>
-    public static string FrontEndAssembly => Path.Combine(AppContext.BaseDirectory, "ilrepl.dll");
+    public static string FrontEndAssembly => Path.Join(AppContext.BaseDirectory, "ilrepl.dll");
 
     private static string FindRoot()
     {
         var directory = AppContext.BaseDirectory;
         while (directory is not null)
         {
-            if (File.Exists(Path.Combine(directory, "IlRepl.slnx")))
+            if (File.Exists(Path.Join(directory, "IlRepl.slnx")))
             {
                 return directory;
             }

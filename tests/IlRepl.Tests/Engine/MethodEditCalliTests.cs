@@ -68,7 +68,8 @@ public sealed class MethodEditCalliTests
         session.AddLine("call Scenario");
         foreach (var image in new[] { AssemblyExporter.Write(session, "calli-types"), IlasmLocator.Assemble(session.ToIlAsm()) })
         {
-            using var module = ModuleDefinition.ReadModule(new MemoryStream(image));
+            using var moduleStream = new MemoryStream(image);
+            using var module = ModuleDefinition.ReadModule(moduleStream);
             var owner = module.Types.Single(type => type.FullName == edit.Method.DeclaringType!.FullName);
             var site = owner.Methods.Single(method => method.Name == "Read").Body.Instructions
                 .Select(instruction => instruction.Operand).OfType<CallSite>().Single();
@@ -84,7 +85,7 @@ public sealed class MethodEditCalliTests
             var context = new AssemblyLoadContext("calli-export", isCollectible: true);
             try
             {
-                var exported = context.LoadFromStream(new MemoryStream(image));
+                var exported = context.LoadImage(image);
                 Assert.AreEqual(42, exported.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
             }
             finally
@@ -124,7 +125,8 @@ public sealed class MethodEditCalliTests
         Assert.AreEqual("nonpublic", dependency.Access);
         var writer = new CecilWriter(SessionAssemblyKind.Types);
         family.Write(writer);
-        using var exported = ModuleDefinition.ReadModule(new MemoryStream(writer.Write()));
+        using var exportedStream = new MemoryStream(writer.Write());
+        using var exported = ModuleDefinition.ReadModule(exportedStream);
         var site = exported.Types.SelectMany(type => type.Methods).Single(method => method.Name == "Read")
             .Body.Instructions.Select(instruction => instruction.Operand).OfType<CallSite>().Single();
         var parameter = (SentinelType)site.Parameters.Single().ParameterType;

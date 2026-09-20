@@ -212,18 +212,15 @@ internal sealed class CompletionCandidateSource
                     cancellationToken.ThrowIfCancellationRequested();
                     if (_site.Kind == CompletionSiteKind.Field)
                     {
-                        foreach (var field in _scope.Fields(owner))
+                        foreach (var field in _scope.Fields(owner).Where(field => MemberEligibility.Admits(field, _site, _view)))
                         {
-                            if (MemberEligibility.Admits(field, _site, _view))
+                            _candidates.Add(new OperandCandidate
                             {
-                                _candidates.Add(new OperandCandidate
-                                {
-                                    Kind = CompletionKind.Fields, Field = field,
-                                    Rank = new CandidateRankFacts(field.Name, field.Name, _scope.IsSessionType(field.DeclaringType),
-                                        IsCompilerGenerated: field.Name.StartsWith('<'),
-                                        DeclaringPath: SymbolRenderer.IlPath(field.DeclaringType)),
-                                });
-                            }
+                                Kind = CompletionKind.Fields, Field = field,
+                                Rank = new CandidateRankFacts(field.Name, field.Name, _scope.IsSessionType(field.DeclaringType),
+                                    IsCompilerGenerated: field.Name.StartsWith('<'),
+                                    DeclaringPath: SymbolRenderer.IlPath(field.DeclaringType)),
+                            });
                         }
                     }
                     else

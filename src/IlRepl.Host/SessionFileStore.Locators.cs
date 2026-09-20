@@ -42,7 +42,7 @@ public sealed partial class SessionFileStore
             Assets = [.. reference.Assets.Select(asset => asset with
             {
                 Path = asset.PackagePath is not null ? package is null ? null
-                    : Path.Combine(package, asset.PackagePath.Replace('/', Path.DirectorySeparatorChar))
+                    : Path.Join(package, asset.PackagePath.Replace('/', Path.DirectorySeparatorChar))
                     : asset.Path is not null ? Path.GetFullPath(asset.Path.Replace('\\', Path.DirectorySeparatorChar), directory)
                     : remembered.GetValueOrDefault(asset.Hash),
             })],

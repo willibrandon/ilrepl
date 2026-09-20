@@ -91,7 +91,7 @@ public sealed class FunctionPointerDeclarationTests
         try
         {
             var image = AssemblyExporter.Write(session, "function-pointer-modifiers");
-            var assembly = context.LoadFromStream(new MemoryStream(image));
+            var assembly = context.LoadImage(image);
             AssertFunctionPointerModifiers(assembly.GetType("IlRepl.Cell")!.GetMethod("Echo")!);
         }
         finally
@@ -112,8 +112,9 @@ public sealed class FunctionPointerDeclarationTests
         var image = AssemblyExporter.Write(session, "function-pointer-operand");
         var value = (Array)session.Run().Value!;
         Assert.IsTrue(value.GetType().GetElementType()!.IsFunctionPointer);
-        using (var definition = AssemblyDefinition.ReadAssembly(new MemoryStream(image)))
+        using (var exportedImage = new MemoryStream(image))
         {
+            using var definition = AssemblyDefinition.ReadAssembly(exportedImage);
             var run = definition.MainModule.GetType("IlRepl.Cell").Methods.Single(method => method.Name == "Run");
             var operand = (TypeReference)run.Body.Instructions.Single(instruction => instruction.OpCode == OpCodes.Newarr).Operand;
             Assert.IsInstanceOfType<FunctionPointerType>(operand);
@@ -122,7 +123,7 @@ public sealed class FunctionPointerDeclarationTests
         var context = new AssemblyLoadContext("function-pointer-operand", isCollectible: true);
         try
         {
-            var assembly = context.LoadFromStream(new MemoryStream(image));
+            var assembly = context.LoadImage(image);
             var exported = (Array)assembly.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null)!;
             Assert.IsTrue(exported.GetType().GetElementType()!.IsFunctionPointer);
         }
@@ -151,7 +152,7 @@ public sealed class FunctionPointerDeclarationTests
         var context = new AssemblyLoadContext("generic-function-pointer-operand", isCollectible: true);
         try
         {
-            var assembly = context.LoadFromStream(new MemoryStream(image));
+            var assembly = context.LoadImage(image);
             var run = assembly.GetType("IlRepl.Cell")!.GetMethod("Run")!.MakeGenericMethod(typeof(int));
             AssertFunctionPointerElement((Array)run.Invoke(null, null)!, typeof(int));
         }
@@ -179,7 +180,8 @@ public sealed class FunctionPointerDeclarationTests
         Assert.Contains("calli method int32 *(int32)()", il);
         var image = AssemblyExporter.Write(session, "function-pointer-call-site");
         Assert.AreEqual(42, session.Run().Value);
-        using var definition = AssemblyDefinition.ReadAssembly(new MemoryStream(image));
+        using var definitionStream = new MemoryStream(image);
+        using var definition = AssemblyDefinition.ReadAssembly(definitionStream);
         var run = definition.MainModule.GetType("IlRepl.Cell").Methods.Single(method => method.Name == "Run");
         var sites = run.Body.Instructions.Where(instruction => instruction.OpCode == OpCodes.Calli)
             .Select(instruction => (CallSite)instruction.Operand).ToArray();
@@ -188,7 +190,7 @@ public sealed class FunctionPointerDeclarationTests
         var context = new AssemblyLoadContext("function-pointer-call-site", isCollectible: true);
         try
         {
-            var assembly = context.LoadFromStream(new MemoryStream(IlasmLocator.Assemble(il)));
+            var assembly = context.LoadImage(IlasmLocator.Assemble(il));
             Assert.AreEqual(42, assembly.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
         }
         finally
@@ -208,7 +210,7 @@ public sealed class FunctionPointerDeclarationTests
         var context = new AssemblyLoadContext("function-pointers", isCollectible: true);
         try
         {
-            var assembly = context.LoadFromStream(new MemoryStream(image));
+            var assembly = context.LoadImage(image);
             var pointers = assembly.GetType("Pointers")!;
             Assert.IsTrue(pointers.GetField("Current")!.FieldType.IsFunctionPointer);
             Assert.IsTrue(pointers.GetMethod("Pointer")!.ReturnType.IsFunctionPointer);
@@ -337,7 +339,7 @@ public sealed class FunctionPointerDeclarationTests
             var context = new AssemblyLoadContext("generic-function-pointer", isCollectible: true);
             try
             {
-                var assembly = context.LoadFromStream(new MemoryStream(image));
+                var assembly = context.LoadImage(image);
                 var box = assembly.GetType("Box`1")!.MakeGenericType(typeof(int));
                 Assert.AreEqual(42, box.GetMethod("Call")!.Invoke(null, [42]));
             }
@@ -394,7 +396,8 @@ public sealed class FunctionPointerDeclarationTests
     private static void AssertGenericArgument<T>(byte[] image)
         where T : TypeReference
     {
-        using var definition = AssemblyDefinition.ReadAssembly(new MemoryStream(image));
+        using var definitionStream = new MemoryStream(image);
+        using var definition = AssemblyDefinition.ReadAssembly(definitionStream);
         var run = definition.MainModule.GetType("IlRepl.Cell").Methods.Single(method => method.Name == "Run");
         var call = Assert.IsInstanceOfType<GenericInstanceMethod>(
             run.Body.Instructions.Single(instruction => instruction.OpCode == OpCodes.Call).Operand);

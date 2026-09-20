@@ -42,8 +42,9 @@ public sealed class ExternalOriginalScenarioTests
         }
 
         var package = ComparisonCapture.Create(session, "Copy using Scenario");
-        using (var module = ModuleDefinition.ReadModule(new MemoryStream(package.Original.Image)))
+        using (var original = new MemoryStream(package.Original.Image))
         {
+            using var module = ModuleDefinition.ReadModule(original);
             var call = module.Types.SelectMany(type => type.Methods).Where(method => method.HasBody)
                 .SelectMany(method => method.Body.Instructions).Select(instruction => instruction.Operand).OfType<MethodReference>()
                 .Single(method => method.Name == "Read" && method.DeclaringType.Scope.Name == assembly.GetName().Name);

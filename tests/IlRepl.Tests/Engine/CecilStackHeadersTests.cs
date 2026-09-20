@@ -36,8 +36,10 @@ public sealed class CecilStackHeadersTests
 
         CecilStackHeaders.Apply(image, limits);
 
-        using var before = ModuleDefinition.ReadModule(new MemoryStream(original));
-        using var after = ModuleDefinition.ReadModule(new MemoryStream(image));
+        using var beforeStream = new MemoryStream(original);
+        using var before = ModuleDefinition.ReadModule(beforeStream);
+        using var afterStream = new MemoryStream(image);
+        using var after = ModuleDefinition.ReadModule(afterStream);
         var originalBody = before.Types.Single(type => type.Name == "Program").Methods.Single().Body;
         var correctedBody = after.Types.Single(type => type.Name == "Program").Methods.Single().Body;
         Assert.AreEqual(limit ?? 1, correctedBody.MaxStackSize);
@@ -53,7 +55,7 @@ public sealed class CecilStackHeadersTests
         var context = new AssemblyLoadContext(null, isCollectible: true);
         try
         {
-            var loaded = context.LoadFromStream(new MemoryStream(image));
+            var loaded = context.LoadImage(image);
             Assert.AreEqual(42, loaded.GetType("Program")!.GetMethod("Main")!.Invoke(null, null));
         }
         finally
@@ -74,7 +76,8 @@ public sealed class CecilStackHeadersTests
         assembly.Write(stream);
         var image = stream.ToArray();
         var original = image.ToArray();
-        using var emitted = ModuleDefinition.ReadModule(new MemoryStream(image));
+        using var emittedStream = new MemoryStream(image);
+        using var emitted = ModuleDefinition.ReadModule(emittedStream);
         Assert.AreEqual(8, emitted.Types.Single(type => type.Name == "Program").Methods.Single().Body.MaxStackSize);
 
         var failure = Assert.ThrowsExactly<ReplException>(() =>
@@ -121,7 +124,8 @@ public sealed class CecilStackHeadersTests
         }
 
         CecilStackHeaders.Apply(image, limits);
-        using var emitted = ModuleDefinition.ReadModule(new MemoryStream(image));
+        using var emittedStream = new MemoryStream(image);
+        using var emitted = ModuleDefinition.ReadModule(emittedStream);
         Assert.AreEqual(depth, emitted.Types.Single(type => type.Name == "Program").Methods.Single().Body.MaxStackSize);
     }
 

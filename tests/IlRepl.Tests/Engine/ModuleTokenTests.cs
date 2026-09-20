@@ -147,7 +147,7 @@ public sealed class ModuleTokenTests
             context.Resolving += (_, name) => session.Resolver.Assemblies.FirstOrDefault(assembly => assembly.FullName == name.FullName);
             try
             {
-                var assembly = context.LoadFromStream(new MemoryStream(image));
+                var assembly = context.LoadImage(image);
                 Assert.AreEqual(expected, assembly.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
             }
             finally

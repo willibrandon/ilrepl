@@ -121,7 +121,7 @@ public sealed class IndirectReflectionTests
             var context = new AssemblyLoadContext("runtime-delegate", isCollectible: true);
             try
             {
-                var exported = context.LoadFromStream(new MemoryStream(image));
+                var exported = context.LoadImage(image);
                 Assert.AreEqual(42, exported.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
             }
             finally
@@ -197,7 +197,7 @@ public sealed class IndirectReflectionTests
             var context = new AssemblyLoadContext("indirect-copy", isCollectible: true);
             try
             {
-                var exported = context.LoadFromStream(new MemoryStream(image));
+                var exported = context.LoadImage(image);
                 Assert.AreEqual(42, exported.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
             }
             finally

@@ -40,7 +40,7 @@ public sealed class FrontEndProcessTests
     {
         using var files = new SessionWorkspaceFixture();
         string[] lines = ["ldstr \"visible output\"", "call void Console::WriteLine(string)", "ldc.i4 42", "ret"];
-        var source = Path.Combine(files.DirectoryPath, "output.il");
+        var source = Path.Join(files.DirectoryPath, "output.il");
         await File.WriteAllLinesAsync(source, lines, TestContext.CancellationToken);
         var (code, stdout, stderr) = await RunAsync(eval ? ["--no-color", "-e", string.Join(';', lines)] : ["--no-color", source]);
         Assert.AreEqual(0, code, stderr);
@@ -78,7 +78,7 @@ public sealed class FrontEndProcessTests
     [TestMethod]
     public async Task Script_EchoesInputAndReportsFailure()
     {
-        var path = Path.Combine(Path.GetTempPath(), "ilrepl-tests", Guid.NewGuid().ToString("N") + ".il");
+        var path = Path.Join(Path.GetTempPath(), "ilrepl-tests", Guid.NewGuid().ToString("N") + ".il");
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         await File.WriteAllLinesAsync(path, ["ldc.i4 1", "bogus", "ret"], TestContext.CancellationToken);
         try
@@ -110,7 +110,7 @@ public sealed class FrontEndProcessTests
         var directory = Directory.CreateTempSubdirectory("ilrepl-source-lines-").FullName;
         try
         {
-            var path = Path.Combine(directory, "failure.il");
+            var path = Path.Join(directory, "failure.il");
             string[] lines = ["// header", ".locals init (int32 value)", "ldstr \"wrong\"", "call int32 Math::Abs(int32)"];
             if (scriptQuiet)
             {
@@ -149,7 +149,7 @@ public sealed class FrontEndProcessTests
     [TestMethod]
     public async Task Script_MultiLineCommentInsideMethod()
     {
-        var path = Path.Combine(Path.GetTempPath(), "ilrepl-tests", Guid.NewGuid().ToString("N") + ".il");
+        var path = Path.Join(Path.GetTempPath(), "ilrepl-tests", Guid.NewGuid().ToString("N") + ".il");
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         await File.WriteAllLinesAsync(path,
             [".method int32 F() {", "/* open", ".reset", "still */ ldc.i4.1", "ret", "}", "call int32 F()", "ret"],
@@ -175,7 +175,7 @@ public sealed class FrontEndProcessTests
     [TestMethod]
     public async Task Script_CommentOnlyLines_NeverRun()
     {
-        var path = Path.Combine(Path.GetTempPath(), "ilrepl-tests", Guid.NewGuid().ToString("N") + ".il");
+        var path = Path.Join(Path.GetTempPath(), "ilrepl-tests", Guid.NewGuid().ToString("N") + ".il");
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         await File.WriteAllLinesAsync(path,
             ["ldc.i4 1", "// one", "/* two", "", "*/", "ldc.i4 2", "add", "", "ldc.i4 3", "// three", "ret"],
@@ -200,7 +200,7 @@ public sealed class FrontEndProcessTests
     [TestMethod]
     public async Task Script_DefinesAndUsesClass()
     {
-        var path = Path.Combine(Path.GetTempPath(), "ilrepl-tests", Guid.NewGuid().ToString("N") + ".il");
+        var path = Path.Join(Path.GetTempPath(), "ilrepl-tests", Guid.NewGuid().ToString("N") + ".il");
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         await File.WriteAllLinesAsync(path,
         [
@@ -310,8 +310,8 @@ public sealed class FrontEndProcessTests
             await auto.WaitUntilTextAsync("1 instruction");
             await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
             Assert.AreEqual(0, await run);
-            Assert.IsFalse(File.Exists(Path.Combine(config, "ilrepl", "history")), "no history file");
-            Assert.IsFalse(Directory.Exists(Path.Combine(config, "ilrepl")), "not even the directory");
+            Assert.IsFalse(File.Exists(Path.Join(config, "ilrepl", "history")), "no history file");
+            Assert.IsFalse(Directory.Exists(Path.Join(config, "ilrepl")), "not even the directory");
         }
         finally
         {
@@ -350,7 +350,7 @@ public sealed class FrontEndProcessTests
                 Assert.AreEqual(0, await run);
             }
 
-            var file = Path.Combine(config, "ilrepl", "history");
+            var file = Path.Join(config, "ilrepl", "history");
             var content = await File.ReadAllTextAsync(file, ct);
             Assert.HasCount(1, content.Split('\n').Where(l => l.StartsWith("# ", StringComparison.Ordinal)).ToList(),
                 "one entry:\n" + content);
@@ -529,7 +529,7 @@ public sealed class FrontEndProcessTests
     [TestMethod]
     public async Task Script_EndingInsideMethod_Fails()
     {
-        var path = Path.Combine(Path.GetTempPath(), "ilrepl-tests", Guid.NewGuid().ToString("N") + ".il");
+        var path = Path.Join(Path.GetTempPath(), "ilrepl-tests", Guid.NewGuid().ToString("N") + ".il");
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         await File.WriteAllLinesAsync(path, [".method int32 Two() {", "ldc.i4 2"], TestContext.CancellationToken);
         try

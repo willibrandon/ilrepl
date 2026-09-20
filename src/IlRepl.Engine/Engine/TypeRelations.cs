@@ -153,17 +153,14 @@ public static class TypeRelations
         var seen = new HashSet<Type>(ReferenceEqualityComparer.Instance);
         void Visit(Type t)
         {
-            foreach (var i in DeclaredInterfacesOf(t, types))
+            foreach (var i in DeclaredInterfacesOf(t, types).Where(i => seen.Add(i) || !found.Any(f => TypeIdentity.Equal(f, i))))
             {
-                if (seen.Add(i) || !found.Any(f => TypeIdentity.Equal(f, i)))
+                if (!found.Any(f => TypeIdentity.Equal(f, i)))
                 {
-                    if (!found.Any(f => TypeIdentity.Equal(f, i)))
-                    {
-                        found.Add(i);
-                    }
-
-                    Visit(i);
+                    found.Add(i);
                 }
+
+                Visit(i);
             }
         }
 

@@ -40,8 +40,8 @@ public sealed class ComparisonDescendantTests
     {
         var token = TestContext.CancellationToken;
         using var files = new SessionWorkspaceFixture();
-        var record = Path.Combine(files.DirectoryPath, "processes");
-        var ready = Path.Combine(files.DirectoryPath, "ready");
+        var record = Path.Join(files.DirectoryPath, "processes");
+        var ready = Path.Join(files.DirectoryPath, "ready");
         using var child = ComparisonDescendantSource.Start(Environment.ProcessPath!, record, ready, false, false);
         try
         {
@@ -101,7 +101,7 @@ public sealed class ComparisonDescendantTests
     {
         TestSkip.Unless(!escape || !OperatingSystem.IsWindows(), "Unix session escape is not available on Windows");
         var records = Directory.CreateTempSubdirectory("ilrepl-descendants-");
-        var record = Path.Combine(records.FullName, "processes");
+        var record = Path.Join(records.FullName, "processes");
         using var cancel = CancellationTokenSource.CreateLinkedTokenSource(TestContext.CancellationToken);
         Task<ComparisonReply>? running = null;
         try

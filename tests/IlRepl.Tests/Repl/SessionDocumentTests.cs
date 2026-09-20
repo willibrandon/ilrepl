@@ -135,8 +135,8 @@ public sealed class SessionDocumentTests
             fixture.WritePackage(second, "1.0.0", 42);
             var firstImage = fixture.PackageImage(first, "1.0.0");
             var secondImage = fixture.PackageImage(second, "1.0.0");
-            var firstPath = Path.Combine(directory, first + ".dll");
-            var secondPath = Path.Combine(directory, second + ".dll");
+            var firstPath = Path.Join(directory, first + ".dll");
+            var secondPath = Path.Join(directory, second + ".dll");
             File.WriteAllBytes(firstPath, firstImage);
             File.WriteAllBytes(secondPath, secondImage);
             using var core = new ReplCore();
@@ -159,8 +159,8 @@ public sealed class SessionDocumentTests
     public void ReopenSession_RetainsOutputBeforeThrowWithoutRepeatingSideEffects()
     {
         var directory = Directory.CreateTempSubdirectory("ilrepl-output-history-").FullName;
-        var marker = Path.Combine(directory, "executed.txt");
-        var path = Path.Combine(directory, "failed.ilrepl.json");
+        var marker = Path.Join(directory, "executed.txt");
+        var path = Path.Join(directory, "failed.ilrepl.json");
         try
         {
             using var core = new ReplCore();
@@ -533,7 +533,7 @@ public sealed class SessionDocumentTests
     [TestMethod]
     public void ReopenSession_DoesNotExecuteHistoricalOrCurrentCells()
     {
-        var marker = Path.Combine(Path.GetTempPath(), "ilrepl-session-cell-" + Guid.NewGuid().ToString("N"));
+        var marker = Path.Join(Path.GetTempPath(), "ilrepl-session-cell-" + Guid.NewGuid().ToString("N"));
         try
         {
             using var core = new ReplCore();
@@ -567,8 +567,8 @@ public sealed class SessionDocumentTests
     public Task ReopenSession_LoadsCapturedReferenceWithoutInitializingIt() =>
         IsolatedTestProcess.WithDirectoryAsync(TestContext, directory =>
         {
-            var marker = Path.Combine(directory, "marker");
-            var path = Path.Combine(directory, "source.dll");
+            var marker = Path.Join(directory, "marker");
+            var path = Path.Join(directory, "source.dll");
             File.WriteAllBytes(path, ModuleInitializerFixture.Create(true, marker));
             using var core = new ReplCore();
             Submit(core, ".load " + path, ".method int32 Read() {", "call int32 Owner::Read()", "ret", "}");

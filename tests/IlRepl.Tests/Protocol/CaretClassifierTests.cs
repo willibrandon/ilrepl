@@ -15,7 +15,7 @@ public sealed class CaretClassifierTests
 {
     private static readonly CaretClassifier Classifier = new(new CilTokenizer(CilVocabularyBuilder.Vocabulary));
 
-    private static string FixtureDirectory => Path.Combine(AppContext.BaseDirectory, "Protocol", "Fixtures", "highlight");
+    private static string FixtureDirectory => Path.Join(AppContext.BaseDirectory, "Protocol", "Fixtures", "highlight");
 
     /// <summary>
     /// The fixture files, one row each.
@@ -1055,7 +1055,7 @@ public sealed class CaretClassifierTests
     public void Classify_HighlightFixtures_NeverThrow(string file)
     {
         var tokenizer = new CilTokenizer(CilVocabularyBuilder.Vocabulary);
-        var lines = File.ReadAllLines(Path.Combine(FixtureDirectory, file));
+        var lines = File.ReadAllLines(Path.Join(FixtureDirectory, file));
         Assert.IsNotEmpty(lines, file);
         var inComment = false;
         var sites = 0;

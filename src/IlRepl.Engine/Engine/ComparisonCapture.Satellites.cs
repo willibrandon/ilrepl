@@ -57,7 +57,8 @@ public static partial class ComparisonCapture
         try
         {
             var image = File.ReadAllBytes(path);
-            using var module = ModuleDefinition.ReadModule(new MemoryStream(image, writable: false));
+            using var stream = new MemoryStream(image, writable: false);
+            using var module = ModuleDefinition.ReadModule(stream);
             var name = module.Assembly?.Name ?? throw new BadImageFormatException("the satellite has no assembly identity");
             var identity = new AssemblyName(name.FullName);
             var owner = new AssemblyName(parent.Name);

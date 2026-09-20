@@ -54,12 +54,9 @@ public sealed partial class EditingSession
             AddBodyLine(text);
         }
 
-        foreach (var block in enclosing)
+        foreach (var block in enclosing.Where(block => _state.OpenTypes.Contains(block)))
         {
-            if (_state.OpenTypes.Contains(block))
-            {
-                block.Lines.Add(text);
-            }
+            block.Lines.Add(text);
         }
     }
 

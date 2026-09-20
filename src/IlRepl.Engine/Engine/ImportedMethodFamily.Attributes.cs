@@ -101,12 +101,10 @@ internal sealed partial class ImportedMethodFamily
                 ScanAttributeArgument(argument.TypedValue, owner, origin);
                 if (copied && argument.MemberInfo is PropertyInfo property)
                 {
-                    foreach (var accessor in ImportedMetadata.Accessors(property))
+                    foreach (var accessor in ImportedMetadata.Accessors(property)
+                        .Where(accessor => _types.ContainsKey(DefinitionOf(accessor.DeclaringType!))))
                     {
-                        if (_types.ContainsKey(DefinitionOf(accessor.DeclaringType!)))
-                        {
-                            AddMethod(accessor);
-                        }
+                        AddMethod(accessor);
                     }
                 }
             }

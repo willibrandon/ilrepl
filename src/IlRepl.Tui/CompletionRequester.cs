@@ -533,7 +533,7 @@ public sealed class CompletionRequester
         {
             if (_owned[index].Task.IsCompleted && !ReferenceEquals(_owned[index], _pending))
             {
-                _owned[index].Cancellation.Dispose();
+                _owned[index].Dispose();
                 _owned.RemoveAt(index);
             }
         }

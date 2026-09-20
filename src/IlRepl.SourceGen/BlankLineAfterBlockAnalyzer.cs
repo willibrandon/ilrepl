@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -61,12 +62,9 @@ public sealed class BlankLineAfterBlockAnalyzer : DiagnosticAnalyzer
 
                 // A comment beside that punctuation has no blank line above it either.
                 last = LastOnLine(next);
-                foreach (var trivia in last.TrailingTrivia)
+                foreach (var trivia in last.TrailingTrivia.Where(trivia => !IsLayout(trivia)))
                 {
-                    if (!IsLayout(trivia))
-                    {
-                        context.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.BlankLineAfterBrace, trivia.GetLocation()));
-                    }
+                    context.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.BlankLineAfterBrace, trivia.GetLocation()));
                 }
             }
         }

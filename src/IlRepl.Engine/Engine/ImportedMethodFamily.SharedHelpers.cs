@@ -64,12 +64,9 @@ internal sealed partial class ImportedMethodFamily
                 return true;
             }
 
-            foreach (var call in references.Calls)
+            foreach (var call in references.Calls.Where(call => call.Module.Assembly == target.Module.Assembly))
             {
-                if (call.Module.Assembly == target.Module.Assembly)
-                {
-                    pending.Enqueue(call);
-                }
+                pending.Enqueue(call);
             }
         }
 

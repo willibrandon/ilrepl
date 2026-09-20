@@ -62,7 +62,8 @@ public sealed class EditableBodyTests
 
         foreach (var image in Images(session))
         {
-            using var module = ModuleDefinition.ReadModule(new MemoryStream(image));
+            using var moduleStream = new MemoryStream(image);
+            using var module = ModuleDefinition.ReadModule(moduleStream);
             var body = FindMethod(module).Body;
             Assert.AreEqual(initialized, body.InitLocals, module.Name);
             Assert.HasCount(slots, body.Variables);
@@ -88,7 +89,8 @@ public sealed class EditableBodyTests
             IlasmLocator.Assemble(IlAsmRenderer.Render(session)),
         })
         {
-            using var module = ModuleDefinition.ReadModule(new MemoryStream(image));
+            using var moduleStream = new MemoryStream(image);
+            using var module = ModuleDefinition.ReadModule(moduleStream);
             var method = module.Types.Single(type => type.Name == "Holder").Methods.Single(method => method.Name == "M");
             Assert.AreEqual(initialized, method.Body.InitLocals);
             Assert.IsEmpty(method.Body.Variables);
@@ -145,7 +147,8 @@ public sealed class EditableBodyTests
         Assert.AreEqual(declared, session.Methods.Single().State.DeclaredMaxStack);
         foreach (var image in Images(session))
         {
-            using var module = ModuleDefinition.ReadModule(new MemoryStream(image));
+            using var moduleStream = new MemoryStream(image);
+            using var module = ModuleDefinition.ReadModule(moduleStream);
             var body = FindMethod(module).Body;
             Assert.IsGreaterThanOrEqualTo(Math.Max(2, declared), body.MaxStackSize);
             Assert.AreEqual(42, Invoke(image));
@@ -325,7 +328,8 @@ public sealed class EditableBodyTests
         var session = AssertRangeBody(body, (0, 42));
         foreach (var image in Images(session))
         {
-            using var module = ModuleDefinition.ReadModule(new MemoryStream(image));
+            using var moduleStream = new MemoryStream(image);
+            using var module = ModuleDefinition.ReadModule(moduleStream);
             var emitted = FindMethod(module).Body;
             Assert.IsNull(emitted.ExceptionHandlers.Single().HandlerEnd);
             Assert.AreEqual(Code.Endfinally, emitted.Instructions[^1].OpCode.Code);
@@ -451,10 +455,12 @@ public sealed class EditableBodyTests
         var session = IlLines.Load([".method int32 M(int32 n) {", .. BodyLines(body), "}"]);
         Assert.AreEqual(8, session.Methods.Single().Version.Body.Invoke(null, [0]));
         var images = Images(session).ToArray();
-        using var expectedModule = ModuleDefinition.ReadModule(new MemoryStream(images[0]));
+        using var expectedModuleStream = new MemoryStream(images[0]);
+        using var expectedModule = ModuleDefinition.ReadModule(expectedModuleStream);
         foreach (var image in images)
         {
-            using var module = ModuleDefinition.ReadModule(new MemoryStream(image));
+            using var moduleStream = new MemoryStream(image);
+            using var module = ModuleDefinition.ReadModule(moduleStream);
             var method = FindMethod(module);
             Assert.AreSequenceEqual(new[] { ExceptionHandlerType.Catch, ExceptionHandlerType.Finally },
                 method.Body.ExceptionHandlers.Select(handler => handler.HandlerType));
@@ -483,7 +489,8 @@ public sealed class EditableBodyTests
                 }
             }
             """);
-        using var expectedModule = ModuleDefinition.ReadModule(new MemoryStream(independent));
+        using var expectedModuleStream = new MemoryStream(independent);
+        using var expectedModule = ModuleDefinition.ReadModule(expectedModuleStream);
         var expected = FindMethod(expectedModule);
         using (var verifier = new IlVerificationOracle())
         {
@@ -498,7 +505,8 @@ public sealed class EditableBodyTests
 
         foreach (var image in Images(session))
         {
-            using var module = ModuleDefinition.ReadModule(new MemoryStream(image));
+            using var moduleStream = new MemoryStream(image);
+            using var module = ModuleDefinition.ReadModule(moduleStream);
             CecilOracle.AssertSameMeaning(expected, FindMethod(module), "self", "self");
             using var verifier = new IlVerificationOracle();
             Assert.IsEmpty(verifier.Verify(image), "Microsoft ILVerification");
@@ -534,7 +542,7 @@ public sealed class EditableBodyTests
         var context = new AssemblyLoadContext("editable-body-" + Guid.NewGuid().ToString("N"), isCollectible: true);
         try
         {
-            var assembly = context.LoadFromStream(new MemoryStream(image));
+            var assembly = context.LoadImage(image);
             return assembly.GetType(typeName, throwOnError: true)!.GetMethod("M",
                 BindingFlags.Public | BindingFlags.Static)!.Invoke(null, arguments);
         }

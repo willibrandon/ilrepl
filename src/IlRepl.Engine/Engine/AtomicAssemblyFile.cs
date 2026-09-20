@@ -26,7 +26,7 @@ internal static class AtomicAssemblyFile
         cancellationToken.ThrowIfCancellationRequested();
         var directory = Path.GetDirectoryName(path)!;
         Directory.CreateDirectory(directory);
-        var temporary = Path.Combine(directory, ".ilrepl-export-" + Guid.NewGuid().ToString("N") + ".tmp");
+        var temporary = Path.Join(directory, ".ilrepl-export-" + Guid.NewGuid().ToString("N") + ".tmp");
         try
         {
             using (var file = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))

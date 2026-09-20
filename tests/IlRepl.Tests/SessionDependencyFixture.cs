@@ -18,9 +18,9 @@ internal sealed class SessionDependencyFixture : IDisposable
     public SessionDependencyFixture()
     {
         Directory.CreateDirectory(FeedPath);
-        Directory.CreateDirectory(Path.Combine(DirectoryPath, "user", ".nuget", "NuGet"));
-        Directory.CreateDirectory(Path.Combine(DirectoryPath, "user", "appdata", "NuGet"));
-        File.Copy(Path.Combine(RepoPaths.Root, "global.json"), Path.Combine(DirectoryPath, "global.json"));
+        Directory.CreateDirectory(Path.Join(DirectoryPath, "user", ".nuget", "NuGet"));
+        Directory.CreateDirectory(Path.Join(DirectoryPath, "user", "appdata", "NuGet"));
+        File.Copy(Path.Join(RepoPaths.Root, "global.json"), Path.Join(DirectoryPath, "global.json"));
         new XDocument(new XElement("configuration",
             new XElement("packageSources", new XElement("clear"),
                 new XElement("add", new XAttribute("key", "local"), new XAttribute("value", FeedPath))),
@@ -30,7 +30,7 @@ internal sealed class SessionDependencyFixture : IDisposable
             new XElement("packageSourceMapping", new XElement("clear"),
                 new XElement("packageSource", new XAttribute("key", "local"),
                     new XElement("package", new XAttribute("pattern", "*"))))))
-            .Save(Path.Combine(DirectoryPath, "NuGet.Config"));
+            .Save(Path.Join(DirectoryPath, "NuGet.Config"));
     }
 
     /// <summary>
@@ -41,12 +41,12 @@ internal sealed class SessionDependencyFixture : IDisposable
     /// <summary>
     /// The fixture's sole configured package source.
     /// </summary>
-    public string FeedPath => Path.Combine(DirectoryPath, "feed");
+    public string FeedPath => Path.Join(DirectoryPath, "feed");
 
     /// <summary>
     /// The fixture's package extraction cache, independent of user and sibling test state.
     /// </summary>
-    public string PackageCachePath => Path.Combine(DirectoryPath, "packages");
+    public string PackageCachePath => Path.Join(DirectoryPath, "packages");
 
     /// <summary>
     /// A unique assembly and package name that cannot collide with another test.
@@ -74,7 +74,7 @@ internal sealed class SessionDependencyFixture : IDisposable
         method.Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
         using var bytes = new MemoryStream();
         assembly.Write(bytes);
-        using var archive = ZipFile.Open(Path.Combine(FeedPath, id + "." + version + ".nupkg"), ZipArchiveMode.Create);
+        using var archive = ZipFile.Open(Path.Join(FeedPath, id + "." + version + ".nupkg"), ZipArchiveMode.Create);
         using (var image = archive.CreateEntry("lib/net10.0/" + id + ".dll").Open())
         {
             bytes.Position = 0;
@@ -102,7 +102,7 @@ internal sealed class SessionDependencyFixture : IDisposable
     /// <param name="framework">The required shared framework.</param>
     public void RequireFramework(string id, string version, string framework)
     {
-        using var archive = ZipFile.Open(Path.Combine(FeedPath, id + "." + version + ".nupkg"), ZipArchiveMode.Update);
+        using var archive = ZipFile.Open(Path.Join(FeedPath, id + "." + version + ".nupkg"), ZipArchiveMode.Update);
         var entry = archive.GetEntry(id + ".nuspec")!;
         XDocument document;
         using (var original = entry.Open())
@@ -126,7 +126,7 @@ internal sealed class SessionDependencyFixture : IDisposable
     /// <returns>The exact implementation bytes.</returns>
     public byte[] PackageImage(string id, string version)
     {
-        using var archive = ZipFile.OpenRead(Path.Combine(FeedPath, id + "." + version + ".nupkg"));
+        using var archive = ZipFile.OpenRead(Path.Join(FeedPath, id + "." + version + ".nupkg"));
         using var source = archive.GetEntry("lib/net10.0/" + id + ".dll")!.Open();
         using var image = new MemoryStream();
         source.CopyTo(image);
@@ -142,7 +142,7 @@ internal sealed class SessionDependencyFixture : IDisposable
     /// <param name="image">The asset bytes.</param>
     public void PackageAsset(string id, string version, string path, byte[] image)
     {
-        using var archive = ZipFile.Open(Path.Combine(FeedPath, id + "." + version + ".nupkg"), ZipArchiveMode.Update);
+        using var archive = ZipFile.Open(Path.Join(FeedPath, id + "." + version + ".nupkg"), ZipArchiveMode.Update);
         archive.GetEntry(path)?.Delete();
         using var destination = archive.CreateEntry(path).Open();
         destination.Write(image);
@@ -154,7 +154,7 @@ internal sealed class SessionDependencyFixture : IDisposable
     /// <param name="pattern">The only package ID pattern allowed to restore from the feed.</param>
     public void MapPackages(string pattern)
     {
-        var path = Path.Combine(DirectoryPath, "NuGet.Config");
+        var path = Path.Join(DirectoryPath, "NuGet.Config");
         var configuration = XDocument.Load(path);
         configuration.Root!.Element("packageSourceMapping")!.Element("packageSource")!.Element("package")!
             .SetAttributeValue("pattern", pattern);
@@ -168,7 +168,7 @@ internal sealed class SessionDependencyFixture : IDisposable
     /// <param name="credentials">Whether to store credentials in configuration instead of using an executable provider.</param>
     public void UseAuthenticatedFeed(SessionAuthenticatedFeed feed, bool credentials = true)
     {
-        var path = Path.Combine(DirectoryPath, "NuGet.Config");
+        var path = Path.Join(DirectoryPath, "NuGet.Config");
         var configuration = XDocument.Load(path);
         var source = configuration.Root!.Element("packageSources")!.Element("add")!;
         source.SetAttributeValue("value", feed.Source);
@@ -189,16 +189,16 @@ internal sealed class SessionDependencyFixture : IDisposable
     /// <returns>The project file path.</returns>
     public string WriteProject()
     {
-        var directory = Path.Combine(DirectoryPath, "project with spaces");
+        var directory = Path.Join(DirectoryPath, "project with spaces");
         Directory.CreateDirectory(directory);
-        var path = Path.Combine(directory, AssemblyName + ".csproj");
+        var path = Path.Join(directory, AssemblyName + ".csproj");
         new XDocument(new XElement("Project", new XAttribute("Sdk", "Microsoft.NET.Sdk"),
             new XElement("PropertyGroup", new XElement("TargetFramework", "net10.0"),
                 new XElement("NuGetAudit", "false")),
             new XElement("Target", new XAttribute("Name", "RecordFixtureSdk"), new XAttribute("AfterTargets", "Build"),
                 new XElement("WriteLinesToFile", new XAttribute("File", "$(MSBuildProjectDirectory)/sdk-version.txt"),
                     new XAttribute("Lines", "$(NETCoreSdkVersion)"), new XAttribute("Overwrite", "true"))))).Save(path);
-        File.WriteAllText(Path.Combine(directory, "Values.cs"), """
+        File.WriteAllText(Path.Join(directory, "Values.cs"), """
             namespace DependencySamples;
             public static class Values
             {
@@ -232,9 +232,9 @@ internal sealed class SessionDependencyFixture : IDisposable
     {
         var variables = environment?.ToDictionary(pair => pair.Key, pair => pair.Value) ?? new Dictionary<string, string?>();
         variables["NUGET_PACKAGES"] = PackageCachePath;
-        variables["DOTNET_CLI_HOME"] = Path.Combine(DirectoryPath, "user");
-        variables["APPDATA"] = Path.Combine(DirectoryPath, "user", "appdata");
-        variables["NUGET_COMMON_APPLICATION_DATA"] = Path.Combine(DirectoryPath, "machine");
+        variables["DOTNET_CLI_HOME"] = Path.Join(DirectoryPath, "user");
+        variables["APPDATA"] = Path.Join(DirectoryPath, "user", "appdata");
+        variables["NUGET_COMMON_APPLICATION_DATA"] = Path.Join(DirectoryPath, "machine");
         variables["DOTNET_SKIP_FIRST_TIME_EXPERIENCE"] = "1";
         variables["DOTNET_CLI_TELEMETRY_OPTOUT"] = "1";
         async Task<IReplEngine> Start(CancellationToken token) =>

@@ -50,7 +50,7 @@ public sealed class NativeWorkloadProcessTests
     public async Task Inspect_WorkloadReceivesInputAndIsolatedFiles()
     {
         using var files = new SessionWorkspaceFixture();
-        var fixture = Path.Combine(Path.GetDirectoryName(files.MarkerPath)!, "input.txt");
+        var fixture = Path.Join(Path.GetDirectoryName(files.MarkerPath)!, "input.txt");
         await File.WriteAllTextAsync(fixture, "fixture λ", TestContext.CancellationToken);
         using var core = new ReplCore();
         Submit(core, ".method void Read() {", "ldstr \"input.txt\"", "call string File::ReadAllText(string)",
@@ -207,7 +207,7 @@ public sealed class NativeWorkloadProcessTests
     public async Task Inspect_StopsRealGrandchildAfterWorkerEnds(bool crash)
     {
         using var files = new SessionWorkspaceFixture();
-        var record = Path.Combine(files.DirectoryPath, "processes");
+        var record = Path.Join(files.DirectoryPath, "processes");
         using var core = new ReplCore();
         core.Session.Resolver.Load(typeof(ComparisonDescendantSource).Assembly.Location);
         try

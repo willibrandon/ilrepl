@@ -37,8 +37,8 @@ public static class HostLocator
         var directory = baseDirectory ?? AppContext.BaseDirectory;
         var candidates = new[]
         {
-            Path.Combine(directory, "host", HostFileName),
-            Path.Combine(directory, HostFileName),
+            Path.Join(directory, "host", HostFileName),
+            Path.Join(directory, HostFileName),
         };
 
         foreach (var candidate in candidates)
@@ -78,7 +78,7 @@ public static class HostLocator
         var root = Environment.GetEnvironmentVariable("DOTNET_ROOT");
         if (!string.IsNullOrWhiteSpace(root))
         {
-            var muxer = Path.Combine(root, OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet");
+            var muxer = Path.Join(root, OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet");
             if (File.Exists(muxer))
             {
                 return muxer;

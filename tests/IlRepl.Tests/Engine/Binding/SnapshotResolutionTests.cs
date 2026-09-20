@@ -237,10 +237,10 @@ public sealed class SnapshotResolutionTests
         var second = new AssemblyLoadContext("parity-second", isCollectible: true);
         try
         {
-            var dependencyA = first.LoadFromStream(new MemoryStream(dependencyImage));
-            var userA = first.LoadFromStream(new MemoryStream(userImage));
-            var dependencyB = second.LoadFromStream(new MemoryStream(dependencyImage));
-            var userB = second.LoadFromStream(new MemoryStream(userImage));
+            var dependencyA = first.LoadImage(dependencyImage);
+            var userA = first.LoadImage(userImage);
+            var dependencyB = second.LoadImage(dependencyImage);
+            var userB = second.LoadImage(userImage);
             var sources = new[] { userA, dependencyB, userB, dependencyA }.Select(a => (a, AssemblySymbolSource.For(a)!)).ToList();
             var catalog = new LoadedBindingCatalog(sources);
             var holderA = catalog.FindType(sources[0].Item2, "U", "Holder")!;
@@ -280,7 +280,7 @@ public sealed class SnapshotResolutionTests
         var secondContext = new AssemblyLoadContext("snapshot-copy", isCollectible: true);
         try
         {
-            var second = secondContext.LoadFromStream(new MemoryStream(image));
+            var second = secondContext.LoadImage(image);
             resolver.AddCaptured(second, image);
             var firstSource = AssemblySymbolSource.For(first)!;
             var secondSource = AssemblySymbolSource.For(second)!;

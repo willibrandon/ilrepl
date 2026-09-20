@@ -62,8 +62,8 @@ public sealed class AccessibilityEquivalenceTests
     public void RuntimeAndReplAgree_OnEveryCategoryAndContext()
     {
         var targetContext = new AssemblyLoadContext("harness-target", isCollectible: true);
-        var target = targetContext.LoadFromStream(new MemoryStream(BuildTarget()));
-        var consumer = new ConsumerContext(target).LoadFromStream(new MemoryStream(BuildConsumer()));
+        var target = targetContext.LoadImage(BuildTarget());
+        var consumer = new ConsumerContext(target).LoadImage(BuildConsumer());
         var t = target.GetType("T")!;
         var n = t.GetNestedType("N", BindingFlags.Public | BindingFlags.NonPublic)!;
         var derived = consumer.GetType("Derived")!;

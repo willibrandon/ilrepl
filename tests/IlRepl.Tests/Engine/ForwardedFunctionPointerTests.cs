@@ -35,7 +35,8 @@ public sealed class ForwardedFunctionPointerTests
         session.AddLine("call Scenario");
         foreach (var image in new[] { AssemblyExporter.Write(session, "forwarded-pointers"), IlasmLocator.Assemble(session.ToIlAsm()) })
         {
-            using var module = ModuleDefinition.ReadModule(new MemoryStream(image));
+            using var moduleStream = new MemoryStream(image);
+            using var module = ModuleDefinition.ReadModule(moduleStream);
             var entry = module.Types.Single(type => type.Name == "<ilrepl>_Copy_Entry");
             Assert.HasCount(1, entry.GenericParameters);
             var forwarding = entry.Methods.Single();
@@ -49,7 +50,7 @@ public sealed class ForwardedFunctionPointerTests
             var context = new AssemblyLoadContext("forwarded-pointers-" + Guid.NewGuid(), isCollectible: true);
             try
             {
-                var assembly = context.LoadFromStream(new MemoryStream(image));
+                var assembly = context.LoadImage(image);
                 Assert.AreEqual(42, assembly.GetType("IlRepl.Cell")!.GetMethod("Scenario")!.Invoke(null, null));
                 Assert.AreEqual(42, assembly.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
             }

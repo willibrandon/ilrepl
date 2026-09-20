@@ -103,7 +103,7 @@ public sealed class SessionPackageAssetTests
             .Assets.Single(asset => asset.Kind == "native").Hash);
         Assert.AreEqual(SessionCodec.Hash(changedNative), retained.References.Single(reference => reference.Origin == "package")
             .Assets.Single(asset => asset.Kind == "native").Hash);
-        var path = Path.Combine(fixture.DirectoryPath, "native.ilrepl.json");
+        var path = Path.Join(fixture.DirectoryPath, "native.ilrepl.json");
         await SubmitAsync(controller, ".session save \"" + path + "\"");
         await SubmitAsync(controller, ".session open \"" + path + "\"");
         await SubmitAsync(controller, "call int32 NativeRead()");
@@ -193,7 +193,7 @@ public sealed class SessionPackageAssetTests
         void WriteNativePackage(string version, byte[] bytes)
         {
             fixture.WritePackage(nativeId, version, 0);
-            using (var archive = ZipFile.Open(Path.Combine(fixture.FeedPath, nativeId + "." + version + ".nupkg"), ZipArchiveMode.Update))
+            using (var archive = ZipFile.Open(Path.Join(fixture.FeedPath, nativeId + "." + version + ".nupkg"), ZipArchiveMode.Update))
             {
                 archive.GetEntry("lib/net10.0/" + nativeId + ".dll")!.Delete();
             }
@@ -314,7 +314,8 @@ public sealed class SessionPackageAssetTests
     {
         using var fixture = new SessionDependencyFixture();
         fixture.WritePackage(fixture.AssemblyName, "1.0.0", 42);
-        using var assembly = AssemblyDefinition.ReadAssembly(new MemoryStream(fixture.PackageImage(fixture.AssemblyName, "1.0.0")));
+        using var assemblyStream = new MemoryStream(fixture.PackageImage(fixture.AssemblyName, "1.0.0"));
+        using var assembly = AssemblyDefinition.ReadAssembly(assemblyStream);
         var other = RuntimeInformation.ProcessArchitecture == Architecture.Arm64 ? TargetArchitecture.AMD64 : TargetArchitecture.ARM64;
         assembly.MainModule.Architecture = other;
         using var output = new MemoryStream();
@@ -323,7 +324,7 @@ public sealed class SessionPackageAssetTests
         var runtime = new AssemblyLoadContext("foreign-managed-" + fixture.AssemblyName, isCollectible: true);
         try
         {
-            var failure = Assert.ThrowsExactly<FileLoadException>(() => runtime.LoadFromStream(new MemoryStream(foreignImage)));
+            var failure = Assert.ThrowsExactly<FileLoadException>(() => runtime.LoadImage(foreignImage));
             Assert.AreEqual(unchecked((int)0x80132006), failure.HResult);
         }
         finally
@@ -399,14 +400,14 @@ public sealed class SessionPackageAssetTests
         fixture.WritePackage(fixture.AssemblyName, "1.0.0", 0);
         var (nativeName, nativeImage, entryPoint) = NativeImage(fixture.AssemblyName);
         AddNativeCaller(fixture, nativeName, entryPoint);
-        var root = Path.Combine(fixture.DirectoryPath, fixture.AssemblyName + ".dll");
+        var root = Path.Join(fixture.DirectoryPath, fixture.AssemblyName + ".dll");
         await File.WriteAllBytesAsync(root, fixture.PackageImage(fixture.AssemblyName, "1.0.0"), TestContext.CancellationToken);
-        await File.WriteAllBytesAsync(Path.Combine(fixture.DirectoryPath, nativeName), nativeImage, TestContext.CancellationToken);
+        await File.WriteAllBytesAsync(Path.Join(fixture.DirectoryPath, nativeName), nativeImage, TestContext.CancellationToken);
         var (source, satellite, name) = SatelliteAssemblyFixture.Create(versioned: true, dispatch: "direct");
-        var sourcePath = Path.Combine(fixture.DirectoryPath, name + ".dll");
+        var sourcePath = Path.Join(fixture.DirectoryPath, name + ".dll");
         await File.WriteAllBytesAsync(sourcePath, source, TestContext.CancellationToken);
-        var culture = Directory.CreateDirectory(Path.Combine(fixture.DirectoryPath, "fr-FR")).FullName;
-        await File.WriteAllBytesAsync(Path.Combine(culture, name + ".resources.dll"), satellite, TestContext.CancellationToken);
+        var culture = Directory.CreateDirectory(Path.Join(fixture.DirectoryPath, "fr-FR")).FullName;
+        await File.WriteAllBytesAsync(Path.Join(culture, name + ".resources.dll"), satellite, TestContext.CancellationToken);
         await using var controller = await fixture.StartAsync(TestContext.CancellationToken);
 
         await SubmitAsync(controller, ".load \"" + root + "\"");
@@ -432,7 +433,7 @@ public sealed class SessionPackageAssetTests
     {
         using var fixture = new SessionDependencyFixture();
         fixture.WritePackage(fixture.AssemblyName, "1.0.0", 0);
-        using (var archive = ZipFile.Open(Path.Combine(fixture.FeedPath, fixture.AssemblyName + ".1.0.0.nupkg"), ZipArchiveMode.Update))
+        using (var archive = ZipFile.Open(Path.Join(fixture.FeedPath, fixture.AssemblyName + ".1.0.0.nupkg"), ZipArchiveMode.Update))
         {
             archive.GetEntry("lib/net10.0/" + fixture.AssemblyName + ".dll")!.Delete();
         }
@@ -500,8 +501,8 @@ public sealed class SessionPackageAssetTests
         var directory = Path.GetDirectoryName(typeof(object).Assembly.Location)!;
         var name = OperatingSystem.IsWindows() ? "kernel32.dll"
             : OperatingSystem.IsMacOS() ? "libSystem.Native.dylib" : "libSystem.Native.so";
-        var path = OperatingSystem.IsWindows() ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), name)
-            : Path.Combine(directory, name);
+        var path = OperatingSystem.IsWindows() ? Path.Join(Environment.GetFolderPath(Environment.SpecialFolder.System), name)
+            : Path.Join(directory, name);
         return (alias + "Native" + Path.GetExtension(name), File.ReadAllBytes(path),
             OperatingSystem.IsWindows() ? "GetCurrentProcessId" : "SystemNative_GetPid");
     }
@@ -510,7 +511,8 @@ public sealed class SessionPackageAssetTests
 
     private static void AddNativeCaller(SessionDependencyFixture fixture, string name, string entryPoint)
     {
-        using var assembly = AssemblyDefinition.ReadAssembly(new MemoryStream(fixture.PackageImage(fixture.AssemblyName, "1.0.0")));
+        using var assemblyStream = new MemoryStream(fixture.PackageImage(fixture.AssemblyName, "1.0.0"));
+        using var assembly = AssemblyDefinition.ReadAssembly(assemblyStream);
         var module = assembly.MainModule;
         var owner = module.GetType("DependencySamples.Values");
         var library = new ModuleReference(name);
@@ -539,7 +541,8 @@ public sealed class SessionPackageAssetTests
 
     private static void AddManagedFallback(SessionDependencyFixture fixture)
     {
-        using var assembly = AssemblyDefinition.ReadAssembly(new MemoryStream(fixture.PackageImage(fixture.AssemblyName, "1.0.0")));
+        using var assemblyStream = new MemoryStream(fixture.PackageImage(fixture.AssemblyName, "1.0.0"));
+        using var assembly = AssemblyDefinition.ReadAssembly(assemblyStream);
         var module = assembly.MainModule;
         var owner = module.GetType("DependencySamples.Values");
         var fallback = new MethodDefinition("ReadOrFallback", MethodAttributes.Public | MethodAttributes.Static, module.TypeSystem.Int32);

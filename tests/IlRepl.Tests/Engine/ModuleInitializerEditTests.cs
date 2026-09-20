@@ -22,7 +22,7 @@ public sealed class ModuleInitializerEditTests
     [TestMethod]
     public void Edit_ModuleInitializationWaitsForExecution()
     {
-        var marker = Path.Combine(Path.GetTempPath(), "ilrepl-module-" + Guid.NewGuid().ToString("N"));
+        var marker = Path.Join(Path.GetTempPath(), "ilrepl-module-" + Guid.NewGuid().ToString("N"));
         try
         {
             var session = new Session();
@@ -83,7 +83,7 @@ public sealed class ModuleInitializerEditTests
             var context = new AssemblyLoadContext("module-initializer-copies", isCollectible: true);
             try
             {
-                var exported = context.LoadFromStream(new MemoryStream(image));
+                var exported = context.LoadImage(image);
                 var run = exported.GetType("IlRepl.Cell")!.GetMethod("Run")!;
                 Assert.AreEqual(285, run.Invoke(null, null));
                 Assert.AreEqual(285, run.Invoke(null, null));
@@ -137,7 +137,7 @@ public sealed class ModuleInitializerEditTests
             var context = new AssemblyLoadContext("module-initializer-export", isCollectible: true);
             try
             {
-                var exported = context.LoadFromStream(new MemoryStream(image));
+                var exported = context.LoadImage(image);
                 Assert.DoesNotContain(reference => reference.Name == original.GetName().Name, exported.GetReferencedAssemblies());
                 var run = exported.GetType("IlRepl.Cell")!.GetMethod("Run")!;
                 Assert.AreEqual(143, run.Invoke(null, null));

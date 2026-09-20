@@ -50,7 +50,7 @@ public sealed class ForwardedTypeEnumerationTests
             var context = new AssemblyLoadContext("forwarder-replacement", isCollectible: true);
             try
             {
-                var saved = context.LoadFromStream(new MemoryStream(image));
+                var saved = context.LoadImage(image);
                 Assert.AreEqual(1, saved.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
             }
             finally

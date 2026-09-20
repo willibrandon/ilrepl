@@ -139,7 +139,7 @@ public sealed class ArrayCompletionTests
             context.Resolving += (_, name) => name.Name == assembly.GetName().Name ? assembly : null;
             try
             {
-                var exported = context.LoadFromStream(new MemoryStream(image));
+                var exported = context.LoadImage(image);
                 var run = exported.GetType("IlRepl.Cell")!.GetMethod("Run")!;
                 if (run.IsGenericMethodDefinition)
                 {

@@ -205,7 +205,7 @@ public sealed class TypeNameTests
             context.Resolving += (_, name) => name.Name == source.GetName().Name ? source : null;
             try
             {
-                var exported = context.LoadFromStream(new MemoryStream(image));
+                var exported = context.LoadImage(image);
                 Assert.AreEqual(expected, exported.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
             }
             finally

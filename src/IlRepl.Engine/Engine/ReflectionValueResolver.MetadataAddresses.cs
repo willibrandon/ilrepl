@@ -225,12 +225,10 @@ internal sealed partial class ReflectionValueResolver
                 var method = resolveMethod(resolved);
                 if (bodies.TryGetValue(IlAsmRenderer.DefinitionOf(method), out var helper) && helper is not null)
                 {
-                    foreach (var entry in helper.State.Entries.Select((entry, index) => (entry.Instruction, index)))
+                    foreach (var entry in helper.State.Entries.Select((entry, index) => (entry.Instruction, index))
+                        .Where(entry => entry.Instruction?.Op == OpCodes.Ret))
                     {
-                        if (entry.Instruction?.Op == OpCodes.Ret)
-                        {
-                            AddMetadataAddressStack(helper, entry.index, 1, slots, ref unknown);
-                        }
+                        AddMetadataAddressStack(helper, entry.index, 1, slots, ref unknown);
                     }
 
                     return;

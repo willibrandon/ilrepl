@@ -34,7 +34,7 @@ public static class ProcessComparisonRunner
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(package);
-        var path = Path.Combine(Path.GetTempPath(), "ilrepl-compare-" + Guid.NewGuid().ToString("N"));
+        var path = Path.Join(Path.GetTempPath(), "ilrepl-compare-" + Guid.NewGuid().ToString("N"));
         var original = await RunSideAsync(package, true, path, register, cancellationToken).ConfigureAwait(false);
         var edited = await RunSideAsync(package, false, path, register, cancellationToken).ConfigureAwait(false);
         return ComparisonResults.Compare(package, original, edited);
@@ -67,17 +67,17 @@ public static class ProcessComparisonRunner
             // Failed cleanup must prevent the next worker from inheriting changed fixtures or stale control files.
             ComparisonDirectory.Delete(path);
             ComparisonDirectory.Create(path);
-            var work = Directory.CreateDirectory(Path.Combine(directory.FullName, "work"));
-            var packagePath = Path.Combine(directory.FullName, "package.json");
-            var readyPath = Path.Combine(directory.FullName, "ready");
-            var resultPath = Path.Combine(directory.FullName, "result.json");
-            var limitPath = Path.Combine(directory.FullName, "output-limit");
-            var groupPath = Path.Combine(directory.FullName, "group-ready");
-            var startPath = Path.Combine(directory.FullName, "start");
-            var resultReadyPath = Path.Combine(directory.FullName, "result-ready");
+            var work = Directory.CreateDirectory(Path.Join(directory.FullName, "work"));
+            var packagePath = Path.Join(directory.FullName, "package.json");
+            var readyPath = Path.Join(directory.FullName, "ready");
+            var resultPath = Path.Join(directory.FullName, "result.json");
+            var limitPath = Path.Join(directory.FullName, "output-limit");
+            var groupPath = Path.Join(directory.FullName, "group-ready");
+            var startPath = Path.Join(directory.FullName, "start");
+            var resultReadyPath = Path.Join(directory.FullName, "result-ready");
             await File.WriteAllTextAsync(packagePath, JsonSerializer.Serialize(package, ProtocolJsonContext.Default.ComparisonPackage),
                 cancellationToken).ConfigureAwait(false);
-            var bundled = Path.Combine(AppContext.BaseDirectory, "host", "ilrepl-host.dll");
+            var bundled = Path.Join(AppContext.BaseDirectory, "host", "ilrepl-host.dll");
             var host = File.Exists(bundled) ? bundled : typeof(ProcessComparisonRunner).Assembly.Location;
             process.StartInfo = new ProcessStartInfo
             {

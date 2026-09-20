@@ -75,7 +75,7 @@ internal static partial class PackageResolver
             throw new InvalidDataException("the session has package requests without a lock; use .load to resolve them explicitly");
         }
 
-        var output = Path.Combine(Path.GetTempPath(), "ilrepl-restore", Guid.NewGuid().ToString("N"));
+        var output = Path.Join(Path.GetTempPath(), "ilrepl-restore", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(output);
         try
         {
@@ -96,8 +96,8 @@ internal static partial class PackageResolver
                 LibraryRange = new LibraryRange(root.Request, VersionRange.Parse(root.RequestedVersion!), LibraryDependencyTarget.Package),
             }).ToImmutableArray();
 
-            var project = Path.Combine(output, "ilrepl.csproj");
-            var lockPath = Path.Combine(output, "packages.lock.json");
+            var project = Path.Join(output, "ilrepl.csproj");
+            var lockPath = Path.Join(output, "packages.lock.json");
             if (request is null)
             {
                 if (!platformChange)
@@ -112,7 +112,7 @@ internal static partial class PackageResolver
 
             using var graphStream = typeof(PackageResolver).Assembly
                 .GetManifestResourceStream("IlRepl.Host.PortableRuntimeIdentifierGraph.json")!;
-            var graphPath = Path.Combine(output, "runtime-graph.json");
+            var graphPath = Path.Join(output, "runtime-graph.json");
             await using (var graphFile = File.Create(graphPath))
             {
                 await graphStream.CopyToAsync(graphFile, cancellationToken).ConfigureAwait(false);
@@ -131,7 +131,7 @@ internal static partial class PackageResolver
                 RestoreMetadata = new ProjectRestoreMetadata
                 {
                     ProjectStyle = ProjectStyle.PackageReference, ProjectName = "ilrepl", ProjectUniqueName = project,
-                    ProjectPath = project, OutputPath = output, CacheFilePath = Path.Combine(output, "ilrepl.nuget.cache"),
+                    ProjectPath = project, OutputPath = output, CacheFilePath = Path.Join(output, "ilrepl.nuget.cache"),
                     ConfigFilePaths = settings.GetConfigFilePaths(), Sources = SettingsUtility.GetEnabledSources(settings).ToList(),
                     PackagesPath = packages, FallbackFolders = fallback, OriginalTargetFrameworks = [framework.GetShortFolderName()],
                     RestoreLockProperties = new RestoreLockProperties("true", lockPath,
@@ -185,7 +185,7 @@ internal static partial class PackageResolver
                 {
                     foreach (var item in items.Where(item => Path.GetFileName(item.Path) != "_._"))
                     {
-                        var path = Path.GetFullPath(Path.Combine(packagePath, item.Path.Replace('/', Path.DirectorySeparatorChar)));
+                        var path = Path.GetFullPath(Path.Join(packagePath, item.Path.Replace('/', Path.DirectorySeparatorChar)));
                         if (!path.StartsWith(Path.GetFullPath(packagePath) + Path.DirectorySeparatorChar, StringComparison.Ordinal))
                         {
                             throw new InvalidDataException("NuGet returned an asset outside its package directory");

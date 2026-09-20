@@ -22,14 +22,14 @@ internal static class IldasmLocator
 
         var package = typeof(IldasmLocator).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
             .FirstOrDefault(attribute => attribute.Key == "IldasmPackagePath")?.Value;
-        if (!string.IsNullOrEmpty(package) && File.Exists(Path.Combine(package, name)))
+        if (!string.IsNullOrEmpty(package) && File.Exists(Path.Join(package, name)))
         {
-            return Path.Combine(package, name);
+            return Path.Join(package, name);
         }
 
         var directories = (Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator)
-            .Append(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "bin"));
-        return directories.Where(d => d.Length > 0).Select(d => Path.Combine(d, name)).FirstOrDefault(File.Exists);
+            .Append(Path.Join(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "bin"));
+        return directories.Where(d => d.Length > 0).Select(d => Path.Join(d, name)).FirstOrDefault(File.Exists);
     }
 
     /// <summary>
@@ -71,7 +71,7 @@ internal static class IldasmLocator
         var directory = Directory.CreateTempSubdirectory("ilrepl-ildasm-").FullName;
         try
         {
-            var path = Path.Combine(directory, "cell.dll");
+            var path = Path.Join(directory, "cell.dll");
             File.WriteAllBytes(path, image);
             return IlasmLocator.Assemble(Disassemble(path));
         }

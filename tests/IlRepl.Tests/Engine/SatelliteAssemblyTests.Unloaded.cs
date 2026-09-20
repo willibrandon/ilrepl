@@ -38,7 +38,7 @@ public sealed partial class SatelliteAssemblyTests
             return;
         }
 
-        directory = Path.Combine(Path.GetTempPath(), "unloaded-satellite-" + Guid.NewGuid().ToString("N"));
+        directory = Path.Join(Path.GetTempPath(), "unloaded-satellite-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         try
         {
@@ -87,11 +87,11 @@ public sealed partial class SatelliteAssemblyTests
     {
         TestContext.WriteLine($"unloaded satellite: versioned={versioned}, lowercase={lowercase}, missing={missing}");
         var fixture = SatelliteAssemblyFixture.Create(versioned, "direct");
-        var sourcePath = Path.Combine(directory, fixture.Name + ".dll");
+        var sourcePath = Path.Join(directory, fixture.Name + ".dll");
         var culture = lowercase ? SatelliteAssemblyFixture.Culture.ToLowerInvariant() : SatelliteAssemblyFixture.Culture;
-        var satelliteDirectory = Path.Combine(directory, culture);
+        var satelliteDirectory = Path.Join(directory, culture);
         Directory.CreateDirectory(satelliteDirectory);
-        var satellitePath = Path.Combine(satelliteDirectory, fixture.Name + ".resources.dll");
+        var satellitePath = Path.Join(satelliteDirectory, fixture.Name + ".resources.dll");
         File.WriteAllBytes(sourcePath, fixture.Source);
         if (!missing)
         {
@@ -149,7 +149,7 @@ public sealed partial class SatelliteAssemblyTests
                 new AssemblyName(dependency.Name).Name == satelliteName));
             Assert.AreSequenceEqual(fixture.Satellite, captured.Image);
             var capturedPath = Assert.ContainsSingle(parent.OriginalSatelliteFiles);
-            var canonicalPath = Path.Combine(directory, SatelliteAssemblyFixture.Culture, fixture.Name + ".resources.dll");
+            var canonicalPath = Path.Join(directory, SatelliteAssemblyFixture.Culture, fixture.Name + ".resources.dll");
             Assert.AreEqual(File.Exists(canonicalPath) ? canonicalPath : satellitePath, capturedPath);
             Assert.AreEqual(capturedPath, captured.OriginalLocation);
             var result = await ProcessComparisonRunner.RunAsync(package, TestContext.CancellationToken);
@@ -161,7 +161,7 @@ public sealed partial class SatelliteAssemblyTests
             AssertSatellite(assembly, loaded, fixture.Name);
         }
 
-        var prefix = Path.Combine(directory, fixture.Name);
+        var prefix = Path.Join(directory, fixture.Name);
         File.WriteAllText(prefix + ".package.json", JsonSerializer.Serialize(package, ProtocolJsonContext.Default.ComparisonPackage));
         File.WriteAllText(prefix + ".satellite.path", satellitePath);
         File.WriteAllBytes(prefix + ".satellite.image", fixture.Satellite);

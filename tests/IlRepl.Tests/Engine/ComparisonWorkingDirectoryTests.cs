@@ -29,7 +29,7 @@ public sealed class ComparisonWorkingDirectoryTests
         var fixture = Directory.CreateTempSubdirectory("ilrepl-path-fixture-");
         try
         {
-            File.WriteAllText(Path.Combine(fixture.FullName, "data.txt"), "seed");
+            File.WriteAllText(Path.Join(fixture.FullName, "data.txt"), "seed");
             var package = Capture(kind, fixture.FullName);
             var result = await ProcessComparisonRunner.RunAsync(package, TestContext.CancellationToken);
             Assert.AreEqual("match", result.Outcome, result.Original.Detail + "; " + result.Edited.Detail);
@@ -43,7 +43,7 @@ public sealed class ComparisonWorkingDirectoryTests
                 Assert.AreNotEqual(fixture.FullName, work);
             }
 
-            Assert.AreEqual("seed", File.ReadAllText(Path.Combine(fixture.FullName, "data.txt")));
+            Assert.AreEqual("seed", File.ReadAllText(Path.Join(fixture.FullName, "data.txt")));
         }
         finally
         {
@@ -60,7 +60,7 @@ public sealed class ComparisonWorkingDirectoryTests
         var fixture = Directory.CreateTempSubdirectory("ilrepl-parallel-path-");
         try
         {
-            File.WriteAllText(Path.Combine(fixture.FullName, "data.txt"), "seed");
+            File.WriteAllText(Path.Join(fixture.FullName, "data.txt"), "seed");
             var package = Capture("directory", fixture.FullName);
             var results = await Task.WhenAll(ProcessComparisonRunner.RunAsync(package, TestContext.CancellationToken),
                 ProcessComparisonRunner.RunAsync(package, TestContext.CancellationToken));

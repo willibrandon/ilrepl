@@ -26,10 +26,10 @@ public static partial class ComparisonWorker
                 throw new ReplException("the comparison contains an invalid native dependency image");
             }
 
-            var directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            var directory = Path.Join(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "ilrepl", "native", library.Hash);
             Directory.CreateDirectory(directory);
-            var path = Path.Combine(directory, library.Name);
+            var path = Path.Join(directory, library.Name);
             var valid = false;
             if (File.Exists(path))
             {

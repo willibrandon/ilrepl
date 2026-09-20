@@ -299,11 +299,11 @@ public sealed class ReplCoreMethodTests
     [TestMethod]
     public void Handle_SaveWithMethods_NotesCount()
     {
-        var directory = Path.Combine(Path.GetTempPath(), "ilrepl-tests", Guid.NewGuid().ToString("N"));
+        var directory = Path.Join(Path.GetTempPath(), "ilrepl-tests", Guid.NewGuid().ToString("N"));
         try
         {
             var core = Load("ldc.i4 1");
-            core.Handle(".save " + Path.Combine(directory, "plain.dll"));
+            core.Handle(".save " + Path.Join(directory, "plain.dll"));
             Assert.Contains("with IlRepl.Cell.Run\n", Plain(core) + "\n");
             Assert.DoesNotContain(" and ", core.Transcript.Lines[^1].PlainText);
 
@@ -312,7 +312,7 @@ public sealed class ReplCoreMethodTests
                 core.Handle(line);
             }
 
-            core.Handle(".save " + Path.Combine(directory, "fib.dll"));
+            core.Handle(".save " + Path.Join(directory, "fib.dll"));
             Assert.Contains("with IlRepl.Cell.Run and 1 method", core.Transcript.Lines[^1].PlainText);
         }
         finally

@@ -22,14 +22,14 @@ internal sealed class NativeDiagnosticPort : IDisposable
         }
 
         var root = Path.GetTempPath();
-        if (Encoding.UTF8.GetByteCount(Path.Combine(root, name, "p")) + 1 > 100)
+        if (Encoding.UTF8.GetByteCount(Path.Join(root, name, "p")) + 1 > 100)
         {
             root = "/tmp";
         }
 
-        _directory = Path.Combine(root, name);
+        _directory = Path.Join(root, name);
         Directory.CreateDirectory(_directory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-        Address = Path.Combine(_directory, "p");
+        Address = Path.Join(_directory, "p");
     }
 
     /// <summary>

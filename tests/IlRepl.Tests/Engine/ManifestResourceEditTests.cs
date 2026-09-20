@@ -68,7 +68,7 @@ public sealed class ManifestResourceEditTests
             var context = new AssemblyLoadContext("resource-copy", isCollectible: true);
             try
             {
-                var saved = context.LoadFromStream(new MemoryStream(image));
+                var saved = context.LoadImage(image);
                 Assert.AreEqual(42, saved.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
             }
             finally

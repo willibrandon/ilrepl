@@ -35,7 +35,7 @@ public sealed class ToolProcessTests
     {
         var directory = Directory.CreateTempSubdirectory("ilrepl-tool-cancel-").FullName;
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.CancellationToken);
-        var signal = Path.Combine(directory, "started");
+        var signal = Path.Join(directory, "started");
         var task = ToolProcess.RunAsync(Start("--export-tool-wait", signal), cancellation.Token);
         try
         {

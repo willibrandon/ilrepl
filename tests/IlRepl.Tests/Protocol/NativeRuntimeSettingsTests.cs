@@ -244,7 +244,7 @@ public sealed class NativeRuntimeSettingsTests
     [DataRow("11.0.0-preview.1.26104.118")]
     public void FrameworkVersion_PreservesInstalledPreviewSuffix(string version)
     {
-        var path = Path.Combine(Path.GetTempPath(), "dotnet", "shared", "Microsoft.NETCore.App", version, "System.Private.CoreLib.dll");
+        var path = Path.Join(Path.GetTempPath(), "dotnet", "shared", "Microsoft.NETCore.App", version, "System.Private.CoreLib.dll");
 
         Assert.AreEqual(version, NativeRuntimeSettings.FrameworkVersion(path));
     }

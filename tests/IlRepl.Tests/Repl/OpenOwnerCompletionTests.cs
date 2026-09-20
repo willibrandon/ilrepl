@@ -71,7 +71,7 @@ public sealed class OpenOwnerCompletionTests
             session.AddLine("call GenericCaller<object>::Check()");
         }
 
-        var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".dll");
+        var path = Path.Join(Path.GetTempPath(), Guid.NewGuid() + ".dll");
         try
         {
             session.Save(path);
@@ -112,7 +112,7 @@ public sealed class OpenOwnerCompletionTests
         var context = new AssemblyLoadContext("open-owner-export", isCollectible: true);
         try
         {
-            var assembly = context.LoadFromStream(new MemoryStream(image));
+            var assembly = context.LoadImage(image);
             var run = assembly.GetType("IlRepl.Cell")!.GetMethod("Run")!;
             if (generic)
             {

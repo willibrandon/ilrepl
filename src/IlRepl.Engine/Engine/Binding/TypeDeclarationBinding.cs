@@ -254,13 +254,10 @@ internal static class TypeDeclarationBinding
                 continue;
             }
 
-            foreach (var iface in scope.DeclaredInterfacesOf(current))
+            foreach (var iface in scope.DeclaredInterfacesOf(current).Where(iface => !result.Contains(iface)))
             {
-                if (!result.Contains(iface))
-                {
-                    result.Add(iface);
-                    pending.Push(iface);
-                }
+                result.Add(iface);
+                pending.Push(iface);
             }
 
             if (scope.BaseOf(current) is { } parent)

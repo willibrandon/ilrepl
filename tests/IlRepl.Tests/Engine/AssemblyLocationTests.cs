@@ -48,7 +48,7 @@ public sealed class AssemblyLocationTests
             return;
         }
 
-        directory = Path.Combine(Path.GetTempPath(), "source-metadata-" + Guid.NewGuid().ToString("N"));
+        directory = Path.Join(Path.GetTempPath(), "source-metadata-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         try
         {
@@ -89,9 +89,9 @@ public sealed class AssemblyLocationTests
 
     private async Task AssertChangedOriginalFileAsync(string directory)
     {
-        var json = File.ReadAllText(Path.Combine(directory, "frozen-location.json"));
+        var json = File.ReadAllText(Path.Join(directory, "frozen-location.json"));
         var package = JsonSerializer.Deserialize(json, ProtocolJsonContext.Default.ComparisonPackage)!;
-        var path = File.ReadAllText(Path.Combine(directory, "frozen-location.path"));
+        var path = File.ReadAllText(Path.Join(directory, "frozen-location.path"));
         byte[] changed = [1, 2, 3];
         File.WriteAllBytes(path, changed);
         for (var attempt = 0; attempt < 2; attempt++)
@@ -127,7 +127,7 @@ public sealed class AssemblyLocationTests
     private async Task AssertCaseAsync(string directory, string target, string api, string dispatch, bool supported)
     {
         TestContext.WriteLine(target + "." + api + ": " + dispatch);
-        var path = Path.Combine(directory, "actual-source-" + Guid.NewGuid().ToString("N") + ".exe");
+        var path = Path.Join(directory, "actual-source-" + Guid.NewGuid().ToString("N") + ".exe");
         var imageMachine = RuntimeInformation.ProcessArchitecture switch
         {
             Architecture.X64 => Machine.Amd64, Architecture.Arm64 => Machine.Arm64, _ => Machine.I386,
@@ -235,9 +235,9 @@ public sealed class AssemblyLocationTests
         Assert.AreEqual(supported ? "42" : "43", result.Edited.Result!.Value);
         if (!supported && target == "Assembly" && api == "Location" && dispatch == "direct")
         {
-            File.WriteAllText(Path.Combine(directory, "frozen-location.json"),
+            File.WriteAllText(Path.Join(directory, "frozen-location.json"),
                 JsonSerializer.Serialize(package, ProtocolJsonContext.Default.ComparisonPackage));
-            File.WriteAllText(Path.Combine(directory, "frozen-location.path"), path);
+            File.WriteAllText(Path.Join(directory, "frozen-location.path"), path);
             foreach (var line in IlLines.Expand(".method int32 Scenario() { ldstr " + LiteralParser.Escape(fixture.Expected)
                 + "; call Copy; ret }"))
             {
@@ -264,7 +264,7 @@ public sealed class AssemblyLocationTests
             var context = new AssemblyLoadContext("source-copy", isCollectible: true);
             try
             {
-                var exported = context.LoadFromStream(new MemoryStream(image));
+                var exported = context.LoadImage(image);
                 Assert.AreEqual(supported ? 42 : 43, exported.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
             }
             finally

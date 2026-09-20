@@ -19,7 +19,7 @@ internal sealed class ObservedConsolePresentation : IHex1bTerminalPresentationAd
     {
         _inner.InputObserved = bytes =>
         {
-            var path = Path.Combine(directory, Interlocked.Increment(ref _sequence) + ".read");
+            var path = Path.Join(directory, Interlocked.Increment(ref _sequence) + ".read");
             File.WriteAllBytes(path + ".pending", bytes.ToArray());
             File.Move(path + ".pending", path);
         };

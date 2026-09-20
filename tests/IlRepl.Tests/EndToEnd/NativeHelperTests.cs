@@ -21,7 +21,7 @@ public sealed partial class NativeHelperTests
     [TestMethod]
     public void OurCopy_DefinesEveryFunctionThePackageCalls()
     {
-        var source = File.ReadAllText(Path.Combine(RepoPaths.Root, "build", "native", "hex1b", "hex1binterop.c"));
+        var source = File.ReadAllText(Path.Join(RepoPaths.Root, "build", "native", "hex1b", "hex1binterop.c"));
         var defined = Definition().Matches(source).Select(match => match.Groups[1].Value).ToHashSet(StringComparer.Ordinal);
         using var stream = File.OpenRead(typeof(Hex1bTerminal).Assembly.Location);
         using var image = new PEReader(stream);

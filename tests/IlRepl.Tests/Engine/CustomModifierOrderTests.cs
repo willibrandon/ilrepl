@@ -169,7 +169,8 @@ public sealed class CustomModifierOrderTests
         Assert.Contains($"ldsfld {ReturnType} {owner}::Value", il);
         _ = IlasmLocator.Assemble(il);
 
-        using var exported = AssemblyDefinition.ReadAssembly(new MemoryStream(AssemblyExporter.Write(session, "loaded-modifiers")));
+        using var exportedStream = new MemoryStream(AssemblyExporter.Write(session, "loaded-modifiers"));
+        using var exported = AssemblyDefinition.ReadAssembly(exportedStream);
         var run = exported.MainModule.GetType("IlRepl.Cell").Methods.Single(method => method.Name == "Run");
         var called = (MethodReference)run.Body.Instructions.Single(instruction => instruction.OpCode == OpCodes.Call).Operand;
         AssertModifiers(called.ReturnType, ReturnModifiers);
@@ -214,7 +215,8 @@ public sealed class CustomModifierOrderTests
         Assert.Contains($"newobj instance {returnType} {owner}::.ctor()", session.ToIlAsm());
         _ = IlasmLocator.Assemble(session.ToIlAsm());
 
-        using var exported = AssemblyDefinition.ReadAssembly(new MemoryStream(AssemblyExporter.Write(session, "constructor-modifiers")));
+        using var exportedStream = new MemoryStream(AssemblyExporter.Write(session, "constructor-modifiers"));
+        using var exported = AssemblyDefinition.ReadAssembly(exportedStream);
         var run = exported.MainModule.GetType("IlRepl.Cell").Methods.Single(method => method.Name == "Run");
         var created = (MethodReference)run.Body.Instructions.Single(instruction => instruction.OpCode == OpCodes.Newobj).Operand;
         AssertModifiers(created.ReturnType, ReturnModifiers);
@@ -389,7 +391,8 @@ public sealed class CustomModifierOrderTests
         Assert.Contains($"call vararg int32 {owner}::Count(..., {ParameterType})", session.ToIlAsm());
         _ = IlasmLocator.Assemble(session.ToIlAsm());
 
-        using var exported = AssemblyDefinition.ReadAssembly(new MemoryStream(AssemblyExporter.Write(session, "vararg-modifiers")));
+        using var exportedStream = new MemoryStream(AssemblyExporter.Write(session, "vararg-modifiers"));
+        using var exported = AssemblyDefinition.ReadAssembly(exportedStream);
         var run = exported.MainModule.GetType("IlRepl.Cell").Methods.Single(method => method.Name == "Run");
         var called = (MethodReference)run.Body.Instructions.Single(instruction => instruction.OpCode == OpCodes.Call).Operand;
         var sentinel = (SentinelType)called.Parameters.Single().ParameterType;
@@ -485,7 +488,8 @@ public sealed class CustomModifierOrderTests
         Assert.Contains($".locals init ([0] {ReturnType} scratch)", il);
         _ = IlasmLocator.Assemble(il);
 
-        using var exported = AssemblyDefinition.ReadAssembly(new MemoryStream(AssemblyExporter.Write(session, "slot-modifiers")));
+        using var exportedStream = new MemoryStream(AssemblyExporter.Write(session, "slot-modifiers"));
+        using var exported = AssemblyDefinition.ReadAssembly(exportedStream);
         var run = exported.MainModule.GetType("IlRepl.Cell").Methods.Single(method => method.Name == "Run");
         AssertModifiers(run.Parameters.Single().ParameterType, ParameterModifiers);
         AssertModifiers(run.Body.Variables.Single().VariableType, ReturnModifiers);
@@ -673,7 +677,8 @@ public sealed class CustomModifierOrderTests
 
     private static MethodDefinition Method(byte[] image, string typeName, string methodName)
     {
-        using var definition = AssemblyDefinition.ReadAssembly(new MemoryStream(image));
+        using var definitionStream = new MemoryStream(image);
+        using var definition = AssemblyDefinition.ReadAssembly(definitionStream);
         var slash = typeName.IndexOf('/', StringComparison.Ordinal);
         var type = slash < 0
             ? definition.MainModule.GetType(typeName)
@@ -684,7 +689,8 @@ public sealed class CustomModifierOrderTests
 
     private static TypeReference MethodType(byte[] image, string typeName, string fieldName)
     {
-        using var definition = AssemblyDefinition.ReadAssembly(new MemoryStream(image));
+        using var definitionStream = new MemoryStream(image);
+        using var definition = AssemblyDefinition.ReadAssembly(definitionStream);
         return definition.MainModule.GetType(typeName).Fields.Single(field => field.Name == fieldName).FieldType;
     }
 
@@ -697,7 +703,8 @@ public sealed class CustomModifierOrderTests
 
     private static PropertyDefinition Property(byte[] image, string typeName, string propertyName)
     {
-        using var definition = AssemblyDefinition.ReadAssembly(new MemoryStream(image));
+        using var definitionStream = new MemoryStream(image);
+        using var definition = AssemblyDefinition.ReadAssembly(definitionStream);
         return definition.MainModule.GetType(typeName).Properties.Single(candidate => candidate.Name == propertyName);
     }
 

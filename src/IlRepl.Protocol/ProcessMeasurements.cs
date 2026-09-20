@@ -73,7 +73,7 @@ public sealed class ProcessMeasurements : IDisposable
 
             var measurement = new ProcessMeasurement(_role, Environment.ProcessId, RuntimeInformation.FrameworkDescription,
                 GC.GetTotalAllocatedBytes(precise: true), GC.GetTotalMemory(forceFullCollection: true), process.WorkingSet64, stages);
-            File.WriteAllText(Path.Combine(_directory, $"{_role}-{Environment.ProcessId}.json"),
+            File.WriteAllText(Path.Join(_directory, $"{_role}-{Environment.ProcessId}.json"),
                 JsonSerializer.Serialize(measurement, MeasurementJsonContext.Default.ProcessMeasurement));
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)

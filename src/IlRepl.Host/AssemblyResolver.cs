@@ -40,7 +40,7 @@ internal static class AssemblyResolver
             var assemblyName = reader.GetString(reader.GetAssemblyDefinition().Name);
             foreach (var culture in Directory.EnumerateDirectories(directory))
             {
-                var satellite = Path.Combine(culture, assemblyName + ".resources.dll");
+                var satellite = Path.Join(culture, assemblyName + ".resources.dll");
                 if (File.Exists(satellite) && visited.Add(satellite))
                 {
                     selected.Add(await DependencyAsset.ReadAsync(satellite, "satellite", assets, cancellationToken).ConfigureAwait(false));
@@ -62,7 +62,7 @@ internal static class AssemblyResolver
             foreach (var handle in reader.AssemblyReferences)
             {
                 var name = reader.GetString(reader.GetAssemblyReference(handle).Name);
-                var dependency = Path.Combine(directory, name + ".dll");
+                var dependency = Path.Join(directory, name + ".dll");
                 if (File.Exists(dependency))
                 {
                     pending.Enqueue(dependency);

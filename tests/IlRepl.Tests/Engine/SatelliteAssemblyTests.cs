@@ -47,7 +47,7 @@ public sealed partial class SatelliteAssemblyTests
             return;
         }
 
-        directory = Path.Combine(Path.GetTempPath(), "satellite-probe-" + Guid.NewGuid().ToString("N"));
+        directory = Path.Join(Path.GetTempPath(), "satellite-probe-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         try
         {
@@ -88,10 +88,10 @@ public sealed partial class SatelliteAssemblyTests
 
     private async Task AssertChangedSatelliteAsync(string directory)
     {
-        var package = JsonSerializer.Deserialize(File.ReadAllText(Path.Combine(directory, "satellite-package.json")),
+        var package = JsonSerializer.Deserialize(File.ReadAllText(Path.Join(directory, "satellite-package.json")),
             ProtocolJsonContext.Default.ComparisonPackage)!;
-        var satellitePath = File.ReadAllText(Path.Combine(directory, "satellite.path"));
-        var sourcePath = File.ReadAllText(Path.Combine(directory, "satellite-source.path"));
+        var satellitePath = File.ReadAllText(Path.Join(directory, "satellite.path"));
+        var sourcePath = File.ReadAllText(Path.Join(directory, "satellite-source.path"));
         var source = File.ReadAllBytes(sourcePath);
         byte[] changed = [1, 2, 3];
         File.WriteAllBytes(satellitePath, changed);
@@ -156,10 +156,10 @@ public sealed partial class SatelliteAssemblyTests
     {
         TestContext.WriteLine("satellite " + (versioned ? "versioned" : "culture") + ": " + dispatch);
         var fixture = SatelliteAssemblyFixture.Create(versioned, dispatch);
-        var sourcePath = Path.Combine(directory, fixture.Name + ".dll");
-        var satelliteDirectory = Path.Combine(directory, SatelliteAssemblyFixture.Culture);
+        var sourcePath = Path.Join(directory, fixture.Name + ".dll");
+        var satelliteDirectory = Path.Join(directory, SatelliteAssemblyFixture.Culture);
         Directory.CreateDirectory(satelliteDirectory);
-        var satellitePath = Path.Combine(satelliteDirectory, fixture.Name + ".resources.dll");
+        var satellitePath = Path.Join(satelliteDirectory, fixture.Name + ".resources.dll");
         File.WriteAllBytes(sourcePath, fixture.Source);
         File.WriteAllBytes(satellitePath, fixture.Satellite);
         AssertMetadata(fixture.Source, fixture.Satellite, fixture.Name);
@@ -228,10 +228,10 @@ public sealed partial class SatelliteAssemblyTests
                 var captured = Assert.ContainsSingle(changedPackage.Dependencies.Where(item => item.Name == satellite.FullName));
                 Assert.AreEqual(satellitePath, captured.OriginalLocation);
                 Assert.AreSequenceEqual(fixture.Satellite, captured.Image);
-                File.WriteAllText(Path.Combine(directory, "satellite-package.json"),
+                File.WriteAllText(Path.Join(directory, "satellite-package.json"),
                     JsonSerializer.Serialize(changedPackage, ProtocolJsonContext.Default.ComparisonPackage));
-                File.WriteAllText(Path.Combine(directory, "satellite.path"), satellitePath);
-                File.WriteAllText(Path.Combine(directory, "satellite-source.path"), sourcePath);
+                File.WriteAllText(Path.Join(directory, "satellite.path"), satellitePath);
+                File.WriteAllText(Path.Join(directory, "satellite-source.path"), sourcePath);
             }
         }
 
@@ -242,7 +242,7 @@ public sealed partial class SatelliteAssemblyTests
             var context = new AssemblyLoadContext("satellite-copy", isCollectible: true);
             try
             {
-                var exported = context.LoadFromStream(new MemoryStream(image));
+                var exported = context.LoadImage(image);
                 Assert.AreEqual(expected, exported.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
             }
             finally

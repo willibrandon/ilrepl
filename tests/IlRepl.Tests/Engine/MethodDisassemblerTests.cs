@@ -681,9 +681,9 @@ public sealed class MethodDisassemblerTests
         "exercised on Unix")]
     public void Disassemble_LoadedAssembly_UsesImageReadAtLoad()
     {
-        var directory = Path.Combine(Path.GetTempPath(), "ilrepl-tests", Guid.NewGuid().ToString("N"));
+        var directory = Path.Join(Path.GetTempPath(), "ilrepl-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
-        var path = Path.Combine(directory, "Replaced.dll");
+        var path = Path.Join(directory, "Replaced.dll");
         try
         {
             static byte[] Write(int value)
@@ -707,7 +707,7 @@ public sealed class MethodDisassemblerTests
             File.WriteAllBytes(path, Write(1));
             var session = new Session();
             var assembly = session.Resolver.Load(path);
-            var replacement = Path.Combine(directory, "Replaced.new");
+            var replacement = Path.Join(directory, "Replaced.new");
             File.WriteAllBytes(replacement, Write(2));
             File.Move(replacement, path, overwrite: true);
             var listing = MethodDisassembler.Disassemble(assembly.GetType("N.R")!.GetMethod("Value")!, session);

@@ -24,8 +24,8 @@ public sealed class HostCancellationTests
     {
         var token = TestContext.CancellationToken;
         using var files = new SessionWorkspaceFixture();
-        var release = Path.Combine(files.DirectoryPath, "release");
-        var marker = Path.Combine(files.DirectoryPath, "entered");
+        var release = Path.Join(files.DirectoryPath, "release");
+        var marker = Path.Join(files.DirectoryPath, "entered");
         await using var engine = await HostPaths.StartEngineAsync(token);
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var cancelling = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);

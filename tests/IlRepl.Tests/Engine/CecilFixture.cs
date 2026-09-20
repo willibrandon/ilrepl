@@ -40,7 +40,7 @@ internal static class CecilFixture
         definition.Write(stream);
         var image = stream.ToArray();
         var assembly = resolver is null
-            ? new AssemblyLoadContext(name, isCollectible: false).LoadFromStream(new MemoryStream(image))
+            ? new AssemblyLoadContext(name, isCollectible: false).LoadImage(image)
             : resolver.LoadImage(image);
         return (assembly, image, assembly.GetType("N." + typeName)!);
     }

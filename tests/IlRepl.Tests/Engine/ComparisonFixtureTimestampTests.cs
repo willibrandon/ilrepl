@@ -25,12 +25,12 @@ public sealed class ComparisonFixtureTimestampTests
         var fixture = Directory.CreateTempSubdirectory("ilrepl-fixture-times-");
         try
         {
-            Directory.CreateDirectory(Path.Combine(fixture.FullName, "nested"));
-            Directory.CreateDirectory(Path.Combine(fixture.FullName, "empty"));
-            File.WriteAllText(Path.Combine(fixture.FullName, "nested", "data.txt"), "seed");
-            File.CreateSymbolicLink(Path.Combine(fixture.FullName, "alias.txt"), "nested/data.txt");
-            Directory.CreateSymbolicLink(Path.Combine(fixture.FullName, "alias-dir"), "empty");
-            var entries = ComparisonFixtureTimeExamples.Paths.Select(path => Entry(Path.Combine(fixture.FullName, path))).ToArray();
+            Directory.CreateDirectory(Path.Join(fixture.FullName, "nested"));
+            Directory.CreateDirectory(Path.Join(fixture.FullName, "empty"));
+            File.WriteAllText(Path.Join(fixture.FullName, "nested", "data.txt"), "seed");
+            File.CreateSymbolicLink(Path.Join(fixture.FullName, "alias.txt"), "nested/data.txt");
+            Directory.CreateSymbolicLink(Path.Join(fixture.FullName, "alias-dir"), "empty");
+            var entries = ComparisonFixtureTimeExamples.Paths.Select(path => Entry(Path.Join(fixture.FullName, path))).ToArray();
             foreach (var entry in entries.Reverse())
             {
                 entry.CreationTimeUtc = ComparisonFixtureTimeExamples.Timestamp.AddDays(-20);
