@@ -43,4 +43,35 @@ public sealed class NativeEntryPointTests
     {
         Assert.IsNull(NativeEntryPoint.Arm64TargetOffset(first, second, third));
     }
+
+    /// <summary>
+    /// CoreCLR x64 fixup and regular entry stubs yield the distance from the entry to the cell their jump goes through.
+    /// </summary>
+    /// <param name="stub">The bytes at the entry point.</param>
+    /// <param name="expected">The target cell displacement in bytes.</param>
+    [TestMethod]
+    [DataRow("FF25FA3F00004C8B15FB3F0000FF25FD3F000090", 0x4000)]
+    [DataRow("FF25FABFFFFF4C8B15FBBFFFFFFF25FDBFFFFF90", -0x4000)]
+    [DataRow("4C8B15F93F0000FF25F33F0000CCCCCCCCCCCCCC", 0x4000)]
+    public void X64TargetOffset_RecognizesRuntimeStubs(string stub, int expected)
+    {
+        Assert.AreEqual(expected, NativeEntryPoint.X64TargetOffset(Convert.FromHexString(stub)));
+    }
+
+    /// <summary>
+    /// Compiled code that starts like a stub, a tail jump, and a short read provide no entry cell evidence.
+    /// </summary>
+    /// <param name="code">The bytes at the entry point.</param>
+    [TestMethod]
+    [DataRow("FF25FA3F0000488B0148FFC0C3CCCCCCCCCCCCCC")]
+    [DataRow("FF25FA3F00004C8B15FB3F0000FFE0CCCCCCCCCC")]
+    [DataRow("4C8B01498BC0C3CCCCCCCCCCCCCCCCCCCCCCCCCC")]
+    [DataRow("4C8B15F93F0000FFE0CCCCCCCCCCCCCCCCCCCCCC")]
+    [DataRow("48FF25FA3F0000CCCCCCCCCCCCCCCCCCCCCCCCCC")]
+    [DataRow("B82A000000C3CCCCCCCCCCCCCCCCCCCCCCCCCCCC")]
+    [DataRow("FF25FA3F00004C8B15FB3F0000FF")]
+    public void X64TargetOffset_RejectsUnrecognizedInstructions(string code)
+    {
+        Assert.IsNull(NativeEntryPoint.X64TargetOffset(Convert.FromHexString(code)));
+    }
 }

@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using IlRepl.Engine;
 using IlRepl.Host;
 using IlRepl.Protocol;
@@ -231,6 +232,54 @@ public sealed class NativeComparisonProcessTests
             Assert.ContainsSingle(result.Right.Compilations).Normalized);
         Assert.AreEqual(0, result.Left.Invocations);
         Assert.AreEqual(0, result.Right.Invocations);
+    }
+
+    /// <summary>
+    /// A worker that must load a callee's cell address compares equal to one that reaches the cell directly.
+    /// </summary>
+    /// <remarks>
+    /// On x64 the runtime decides this from where it placed the code and the cell, so either worker of a comparison can get
+    /// either form. JitEnableOptionalRelocs=0 asks for the loaded address every time, which makes the rare form repeatable.
+    /// </remarks>
+    /// <param name="body">The instructions of the inspected method, which calls methods of Owner.</param>
+    [TestMethod]
+    [DataRow("call int32 Owner::First(); ldc.i4.1; add; ret")]
+    [DataRow("call int32 Owner::First(); ret")]
+    [DataRow("call int32 Owner::First(); call int32 Owner::Second(); add; ret")]
+    [DataRow("ldarg.0; brfalse ELSE; call int32 Owner::First(); ret; ELSE: call int32 Owner::Second(); ret")]
+    [DataRow("ldc.i4.0; stloc.0; LOOP: ldloc.0; call int32 Owner::First(); add; stloc.0; ldloc.0; ldarg.0; blt LOOP; ldloc.0; ret")]
+    [DataRow("ldarg.0; call void Owner::Use(int32); call int32 Owner::First(); ret")]
+    [DataRow("ldarg.0; switch (A, B, C); ldc.i4.0; ret; A: call int32 Owner::First(); ret; B: call int32 Owner::Second(); ret; "
+        + "C: call int32 Owner::First(); ldc.i4.1; add; ret")]
+    [Timeout(90_000, CooperativeCancellation = true)]
+    public async Task Compare_LoadedCellAddressEqualsTheDirectCall(string body)
+    {
+        using var core = new ReplCore();
+        Submit(core, ".class public Owner {",
+            ".method public static int32 First() cil managed noinlining { ldc.i4.s 42; ret }",
+            ".method public static int32 Second() cil managed noinlining { ldc.i4.s 43; ret }",
+            ".method public static void Use(int32 value) cil managed noinlining { ret }", "}");
+        Submit(core, [".method int32 Read(int32 count) {", ".locals init (int32 total)", .. body.Split("; "), "}"]);
+
+        var direct = await ProcessNativeRunner.RunAsync(Prepare(core, ".jit Read"), TestContext.CancellationToken);
+        var loaded = await ProcessNativeRunner.RunAsync(Prepare(core, ".jit Read --env DOTNET_JitEnableOptionalRelocs=0"),
+            TestContext.CancellationToken);
+
+        Assert.AreEqual("complete", direct.Left.Outcome, Details(direct));
+        Assert.AreEqual("complete", loaded.Left.Outcome, Details(loaded));
+        Assert.IsEmpty(direct.Left.NormalizationProblems);
+        Assert.IsEmpty(loaded.Left.NormalizationProblems);
+        var directLines = Assert.ContainsSingle(direct.Left.Compilations).Normalized;
+        var loadedLines = Assert.ContainsSingle(loaded.Left.Compilations).Normalized;
+        if (RuntimeInformation.ProcessArchitecture == Architecture.X64)
+        {
+            Assert.Contains(line => line.Contains("<entry-point-cell:", StringComparison.Ordinal), loadedLines,
+                "The worker did not load a cell address, so this run proves nothing:\n" + string.Join('\n', loadedLines));
+        }
+
+        Assert.AreSequenceEqual(NativeCellCalls.Fold(NativeAddressLoads.Fold(directLines)),
+            NativeCellCalls.Fold(NativeAddressLoads.Fold(loadedLines)),
+            "direct:\n" + string.Join('\n', directLines) + "\nloaded:\n" + string.Join('\n', loadedLines));
     }
 
     private static NativePackage Prepare(ReplCore core, string command)
