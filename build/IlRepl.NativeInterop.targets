@@ -1,5 +1,5 @@
 <Project>
-  <!-- Hex1b 0.167.0 supplies glibc binaries only. Build its pinned helper with the target musl toolchain. -->
+  <!-- Hex1b supplies glibc binaries only. Build our copy of its helper, native/hex1b, with the target musl toolchain. -->
   <PropertyGroup>
     <_IlReplNativeInteropRid>$(RuntimeIdentifier)</_IlReplNativeInteropRid>
     <_IlReplNativeInteropRid Condition="'$(_IlReplNativeInteropRid)' == '' or '$(_IlReplNativeInteropRid)' == 'any'"
@@ -29,7 +29,7 @@
           Outputs="$(_IlReplNativeInteropDirectory)libhex1binterop.so">
     <MakeDir Directories="$(_IlReplNativeInteropDirectory)" />
     <Exec WorkingDirectory="$(_IlReplNativeInteropDirectory)"
-          Command="cc -O2 -fPIC -shared -o libhex1binterop.so &quot;$(_IlReplNativeInteropSource)&quot; -lutil" />
+          Command="cc -O2 -fPIC -pthread -shared -o libhex1binterop.so &quot;$(_IlReplNativeInteropSource)&quot; -lpthread -lutil" />
     <ItemGroup>
       <FileWrites Include="$(_IlReplNativeInteropDirectory)libhex1binterop.so" />
     </ItemGroup>
