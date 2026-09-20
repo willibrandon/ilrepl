@@ -104,8 +104,8 @@ public sealed partial class SessionController
                 .ConfigureAwait(false));
         }
         catch (Exception exception) when (!cancellationToken.IsCancellationRequested && !_disposed
-            && (exception is OperationCanceledException && execution.IsCancellationRequested
-                || exception is ReplEngineException { ExitCode: 3 } && RecoverHostFailures && _runningExit is not null))
+            && (exception is OperationCanceledException ? execution.IsCancellationRequested
+                : exception is ReplEngineException { ExitCode: 3 } && RecoverHostFailures && _runningExit is not null))
         {
             await candidate.DisposeAsync().ConfigureAwait(false);
             var source = request.Document!;

@@ -73,9 +73,10 @@ internal sealed partial class FlowGraph<T> where T : class
             var handlerStart = Boundary(region.HandlerStart, index, false);
             var handlerEnd = Boundary(region.HandlerEnd, index, true);
             var filter = region.FilterStart is null ? -1 : Boundary(region.FilterStart, index, false);
-            if (start >= 0 && labels.ContainsKey(region.TryEnd) && start >= end
-                || handlerStart >= 0 && labels.ContainsKey(region.HandlerEnd) && handlerStart >= handlerEnd
-                || filter >= 0 && handlerStart >= 0 && filter >= handlerStart)
+            var emptyTry = start >= 0 && labels.ContainsKey(region.TryEnd) && start >= end;
+            var emptyHandler = handlerStart >= 0 && labels.ContainsKey(region.HandlerEnd) && handlerStart >= handlerEnd;
+            var filterAfterHandler = filter >= 0 && handlerStart >= 0 && filter >= handlerStart;
+            if (emptyTry || emptyHandler || filterAfterHandler)
             {
                 Report(index, "FLOW026", AnalysisDiagnosticKind.Error,
                     $"exception ranges must be nonempty and ordered: try {region.TryStart} to {region.TryEnd}, "

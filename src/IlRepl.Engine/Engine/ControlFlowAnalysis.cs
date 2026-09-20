@@ -522,36 +522,44 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
                 var tailCallPassesManagedPointer = TailCallPassesManagedPointer(graph, index, view, values);
                 var integerAssignedToPointer = IntegerAssignedToPointer(view, values, returnType);
                 var nativePointerArrayInstruction = UsesNativePointerArrayInstruction(view, values);
+                bool TypedReferenceFromNativeInt() => view.Op == OpCodes.Mkrefany && values.LastOrDefault()?.Type is { } typedReference
+                    && _types.Category(typedReference) == StackCategory.NativeInt;
+                bool InitOnlyFieldAddress() => view.FieldIsInitOnly && view.Op.Name is "ldflda" or "ldsflda";
+                bool UnverifiableConstructorOperation() => !stateBeforeInstruction.IsCorrelationOnly
+                    && ConstructorOperationIsUnverifiable(view, values, graph, stateBeforeInstruction.ConstructorState);
+                bool ByRefArithmetic() => view.Op.Name is "add" or "sub" or "add.ovf.un" or "sub.ovf.un"
+                    && values.TakeLast(2).Any(value => value.Type is { } type && _types.Algebra.IsByRef(type));
+                bool ReferenceConversion() => view.Op.Name?.StartsWith("conv.", StringComparison.Ordinal) == true
+                    && values.LastOrDefault()?.Type is { } converted
+                    && _types.Category(converted) is StackCategory.ByRef or StackCategory.ObjectReference;
+                bool ComparesByRefWithNativeInt() => FlowNumericRules.Comparison(view.Op.Name!) && values.Length >= 2
+                    && values.TakeLast(2).Any(value => value.Type is { } type && _types.Category(type) == StackCategory.ByRef)
+                    && values.TakeLast(2).Any(value => value.Type is { } type && _types.Category(type) == StackCategory.NativeInt);
+                bool PassesGenericArgumentAsAnotherType() => view.Op.Name is "call" or "callvirt" or "newobj"
+                    && values.Length >= view.ArgumentPops
+                    && view.ParameterTypes.Select((parameter, argument) =>
+                        (parameter, actual: values[values.Length - view.ArgumentPops + (view.IsInstance ? 1 : 0) + argument].Type))
+                        .Any(pair => pair.actual is { } actual && _types.Algebra.IsGenericParameter(actual)
+                            && !_types.Algebra.Same(actual, pair.parameter));
+                bool LoadsConstructorPointer() => view.Op.Name is "ldftn" or "ldvirtftn" && view.MethodIsConstructor == true
+                    && view.MethodIsStatic == false;
                 if (tailCallPassesManagedPointer || integerAssignedToPointer || nativePointerArrayInstruction
                     || view.DecodedPrefixName == "no."
                     || view.Op.Name is "localloc" or "cpblk" or "initblk" or "calli" or "jmp"
-                    || view.Op == OpCodes.Mkrefany && values.LastOrDefault()?.Type is { } typedReference
-                        && _types.Category(typedReference) == StackCategory.NativeInt
+                    || TypedReferenceFromNativeInt()
                     || LoadsPointerSlot(view)
                     || LoadsPointerSlotIndirectly(view, values)
                     || TransformsDataPointer(view, values)
                     || UsesNativeAddress(view, values)
                     || UsesGenericReferenceAddress(view, values)
-                    || view.FieldIsInitOnly && view.Op.Name is "ldflda" or "ldsflda"
-                    || !stateBeforeInstruction.IsCorrelationOnly
-                        && ConstructorOperationIsUnverifiable(
-                            view, values, graph, stateBeforeInstruction.ConstructorState)
-                    || view.Op.Name is "add" or "sub" or "add.ovf.un" or "sub.ovf.un"
-                        && values.TakeLast(2).Any(value => value.Type is { } type && _types.Algebra.IsByRef(type))
-                    || view.Op.Name?.StartsWith("conv.", StringComparison.Ordinal) == true
-                        && values.LastOrDefault()?.Type is { } converted
-                        && _types.Category(converted) is StackCategory.ByRef or StackCategory.ObjectReference
-                    || FlowNumericRules.Comparison(view.Op.Name!) && values.Length >= 2
-                        && values.TakeLast(2).Any(value => value.Type is { } type && _types.Category(type) == StackCategory.ByRef)
-                        && values.TakeLast(2).Any(value => value.Type is { } type && _types.Category(type) == StackCategory.NativeInt)
+                    || InitOnlyFieldAddress()
+                    || UnverifiableConstructorOperation()
+                    || ByRefArithmetic()
+                    || ReferenceConversion()
+                    || ComparesByRefWithNativeInt()
                     || UsesReadOnlyAsWritable(view, values)
-                    || view.Op.Name is "call" or "callvirt" or "newobj" && values.Length >= view.ArgumentPops
-                        && view.ParameterTypes.Select((parameter, argument) =>
-                        (parameter, actual: values[values.Length - view.ArgumentPops + (view.IsInstance ? 1 : 0) + argument].Type))
-                        .Any(pair => pair.actual is { } actual && _types.Algebra.IsGenericParameter(actual)
-                            && !_types.Algebra.Same(actual, pair.parameter))
-                    || (view.Op.Name is "ldftn" or "ldvirtftn") && view.MethodIsConstructor == true
-                        && view.MethodIsStatic == false)
+                    || PassesGenericArgumentAsAnotherType()
+                    || LoadsConstructorPointer())
                 {
                     var operation = tailCallPassesManagedPointer ? "tail." : view.DecodedPrefixName ?? view.Op.Name;
                     Report(index, "FLOW007", $"{operation} uses an operation outside verifiable IL",
@@ -2114,9 +2122,10 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
                         "zero or one return value", count);
                 }
 
-                if (FollowsTailCall(graph, index) && (count == 0 || top is { } returned
+                bool ReturnsBoxedValue() => top is { } returned
                     && (_types.Algebra.IsValueType(returned) || _types.Algebra.IsGenericParameter(returned))
-                    && _types.BoxedType(returned) is null))
+                    && _types.BoxedType(returned) is null;
+                if (FollowsTailCall(graph, index) && (count == 0 || ReturnsBoxedValue()))
                 {
                     return OperandFailure("a tail call in the cell must return object directly; "
                         + "boxing or a synthesized null before ret is not allowed", count - 1, "return value", "object");
@@ -2880,9 +2889,9 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
             }
 
             var name = view.Op.Name!;
-            var permitted = name is "dup" or "pop" || argument == 0
-                && (name.StartsWith("ldind", StringComparison.Ordinal) || name is "ldobj" or "ldfld" or "ldflda" or "stfld"
-                    || view.IsInstance && name is "call" or "callvirt") || name == "cpobj" && argument == 1;
+            var readsThroughIt = name.StartsWith("ldind", StringComparison.Ordinal) || name is "ldobj" or "ldfld" or "ldflda" or "stfld"
+                || view.IsInstance && name is "call" or "callvirt";
+            var permitted = name is "dup" or "pop" || argument == 0 && readsThroughIt || name == "cpobj" && argument == 1;
             if (!permitted)
             {
                 return true;
@@ -3252,28 +3261,37 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
             }
 
             var loadsReceiverThroughAddress = LoadsReceiverThroughAddress(view, pathPopped);
-            var pushed = LoadsLocal(view) && view.LocalIndex is { } loadedLocal
-                && locals?.TryGetValue(loadedLocal, out var local) == true ? local
-                : LoadsLocal(view) && view.LocalIndex is { } receiverLocal
-                    ? ConstantFilterValue(view, false) with
+            FilterPathValue Pushed()
+            {
+                if (LoadsLocal(view) && view.LocalIndex is { } loadedLocal)
+                {
+                    return locals?.TryGetValue(loadedLocal, out var local) == true ? local
+                        : ConstantFilterValue(view, false) with
                     {
-                        ReceiverSource = ~receiverLocal,
+                        ReceiverSource = ~loadedLocal,
                         ReceiverSources = null,
                         HasNonSourceAlternative = false,
-                    }
-                : LoadsArgument(view) && view.ArgumentIndex is { } loadedArgument
-                    && arguments?.TryGetValue(loadedArgument, out var argument) == true ? argument
-                : LoadsArgument(view) && view.ArgumentIndex is { } receiverSource
-                    ? ConstantFilterValue(view, view.ReadsThisArgument && path.ThisArgumentIsOriginal) with
+                    };
+                }
+
+                var isThis = view.ReadsThisArgument && path.ThisArgumentIsOriginal;
+                if (LoadsArgument(view) && view.ArgumentIndex is { } loadedArgument)
+                {
+                    return arguments?.TryGetValue(loadedArgument, out var argument) == true ? argument
+                        : ConstantFilterValue(view, isThis) with
                     {
-                        ReceiverSource = receiverSource,
+                        ReceiverSource = loadedArgument,
                         ReceiverSources = null,
                         HasNonSourceAlternative = false,
-                    }
-                : PreservesFilterDecision(view, popped)
+                    };
+                }
+
+                return PreservesFilterDecision(view, popped)
                     ? pathPopped[^1] with { IsThis = false }
-                : ConstantFilterValue(view, view.ReadsThisArgument && path.ThisArgumentIsOriginal
-                    || loadsReceiverThroughAddress);
+                    : ConstantFilterValue(view, isThis || loadsReceiverThroughAddress);
+            }
+
+            var pushed = Pushed();
             if (view.SlotType is { } slotType && _types.Category(slotType) == StackCategory.Float
                 && (LoadsLocal(view) || LoadsArgument(view)))
             {
@@ -3562,10 +3580,10 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
     private static bool AddressUseIsNonMutating(StackOperandView<T> view, int position)
     {
         var name = view.Op.Name!;
+        var readsThroughIt = name.StartsWith("ldind.", StringComparison.Ordinal) || name is "ldobj" or "ldfld" or "ldflda" or "stfld";
         return name is "dup" or "pop" or "ceq" or "cgt" or "cgt.un" or "clt" or "clt.un"
             or "brtrue" or "brtrue.s" or "brfalse" or "brfalse.s"
-            || position == 0 && (name.StartsWith("ldind.", StringComparison.Ordinal)
-                || name is "ldobj" or "ldfld" or "ldflda" or "stfld")
+            || position == 0 && readsThroughIt
             || position == 1 && name is "cpobj" or "cpblk";
     }
 
@@ -3953,13 +3971,17 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
         var requiredZero = required.IntegerValue is { } requiredInteger ? requiredInteger == 0 : required.IsZero;
         var actualOne = actual.IntegerValue is { } actualOneInteger ? actualOneInteger == 1 : actual.IsOne;
         var requiredOne = required.IntegerValue is { } requiredOneInteger ? requiredOneInteger == 1 : required.IsOne;
-        if (actualZero is { } zero && requiredZero is { } neededZero && zero != neededZero
-            || actualOne is { } one && requiredOne is { } neededOne && one != neededOne
-            || actual.IntegerValue is { } exact && required.IntegerValue is { } needed && exact != needed
-            || actual.IntegerValue is { } actualValue && required.ExcludedIntegers?.Contains(actualValue) == true
-            || required.IntegerValue is { } requiredValue && actual.ExcludedIntegers?.Contains(requiredValue) == true
-            || actual.IsNull is { } actualNull && required.IsNull is { } requiredNull && actualNull != requiredNull
-            || actual.IsNaN is { } actualNaN && required.IsNaN is { } requiredNaN && actualNaN != requiredNaN
+        // Two facts disagree only when both are known.
+        static bool Disagree<TFact>(TFact? first, TFact? second)
+            where TFact : struct => first is { } known && second is { } needed && !known.Equals(needed);
+        static bool Excludes(long? value, IReadOnlyCollection<long>? excluded) => value is { } known && excluded?.Contains(known) == true;
+        if (Disagree(actualZero, requiredZero)
+            || Disagree(actualOne, requiredOne)
+            || Disagree(actual.IntegerValue, required.IntegerValue)
+            || Excludes(actual.IntegerValue, required.ExcludedIntegers)
+            || Excludes(required.IntegerValue, actual.ExcludedIntegers)
+            || Disagree(actual.IsNull, required.IsNull)
+            || Disagree(actual.IsNaN, required.IsNaN)
             || actual.EqualSources?.Any(source => required.ExcludedSources?.Contains(source) == true) == true
             || required.EqualSources?.Any(source => actual.ExcludedSources?.Contains(source) == true) == true)
         {
@@ -4096,15 +4118,14 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
             return left is null && right is null;
         }
 
+        // Two optional parts are the same when both are absent, or both are present and equal.
+        static bool SameOptional<TPart>(TPart? first, TPart? second, Func<TPart, TPart, bool> same)
+            where TPart : class => first is null ? second is null : second is not null && same(first, second);
         return left.CorrelationLost == right.CorrelationLost
             && SameTransformations(left.Transformations, right.Transformations)
             && SameHandlerEntries(left.HandlerEntries, right.HandlerEntries)
-            && (left.BoundOutputs is null && right.BoundOutputs is null
-                || left.BoundOutputs is not null && right.BoundOutputs is not null
-                    && SameTransformations(left.BoundOutputs, right.BoundOutputs))
-            && (left.BoundHandlerEntries is null && right.BoundHandlerEntries is null
-                || left.BoundHandlerEntries is not null && right.BoundHandlerEntries is not null
-                    && SameHandlerEntries(left.BoundHandlerEntries, right.BoundHandlerEntries));
+            && SameOptional(left.BoundOutputs, right.BoundOutputs, SameTransformations)
+            && SameOptional(left.BoundHandlerEntries, right.BoundHandlerEntries, SameHandlerEntries);
     }
 
     private static bool SameHandlerEntries(

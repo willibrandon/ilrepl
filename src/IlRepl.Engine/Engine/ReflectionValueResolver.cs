@@ -380,9 +380,10 @@ internal sealed partial class ReflectionValueResolver(
         var owner = method.DeclaringType;
         var name = method.Name;
         object?[]? Input(int parameter = -1) => Argument(body, position, parameter);
-        if (owner == typeof(Type) && name == nameof(Type.GetTypeFromHandle)
-            || owner == typeof(MethodBase) && name == nameof(MethodBase.GetMethodFromHandle)
-            || owner == typeof(FieldInfo) && name == nameof(FieldInfo.GetFieldFromHandle))
+        var readsHandle = owner == typeof(Type) ? name == nameof(Type.GetTypeFromHandle)
+            : owner == typeof(MethodBase) ? name == nameof(MethodBase.GetMethodFromHandle)
+            : owner == typeof(FieldInfo) && name == nameof(FieldInfo.GetFieldFromHandle);
+        if (readsHandle)
         {
             return Input(0);
         }

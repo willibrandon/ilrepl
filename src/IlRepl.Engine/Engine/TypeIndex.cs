@@ -131,10 +131,9 @@ public sealed class TypeIndex
     /// <returns>The entries, in index order.</returns>
     public IReadOnlyList<TypeIndexEntry> ByPath(string? assemblyHint, string? ns, string? nesting)
     {
-        return [.. _entries.Where(e =>
-            (assemblyHint is null || string.Equals(e.AssemblyName, assemblyHint, StringComparison.OrdinalIgnoreCase))
-            && (ns is null || string.Equals(e.Namespace, ns, StringComparison.OrdinalIgnoreCase))
-            && (nesting is null || string.Equals(NestingOf(e), nesting, StringComparison.OrdinalIgnoreCase)))];
+        static bool Admits(string? wanted, string? actual) =>
+            wanted is null || string.Equals(actual, wanted, StringComparison.OrdinalIgnoreCase);
+        return [.. _entries.Where(e => Admits(assemblyHint, e.AssemblyName) && Admits(ns, e.Namespace) && Admits(nesting, NestingOf(e)))];
     }
 
     private static string NestingOf(TypeIndexEntry entry) => entry.Namespace.Length == 0 || !entry.IlPath.StartsWith(entry.Namespace + ".",

@@ -722,7 +722,9 @@ internal sealed class CilLineReader
     internal bool IsTypeStart(int i) =>
         IsPrimitive(i)
         || IsWord(i, "class") || IsWord(i, "valuetype") || IsWord(i, "method")
-        || ((IsWord(i, "native") || IsWord(i, "unsigned")) && (IsPrimitive(i + 1) || IsWord(i + 1, "native") || IsWord(i + 1, "unsigned")));
+        || IsSizeWord(i) && (IsPrimitive(i + 1) || IsSizeWord(i + 1));
+
+    private bool IsSizeWord(int i) => IsWord(i, "native") || IsWord(i, "unsigned");
 
     private int ReadTypeSuffixes(int i)
     {

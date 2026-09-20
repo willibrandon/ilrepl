@@ -202,10 +202,10 @@ public static partial class NativeNormalizer
                     }
                 }
 
-                var use = memoryUse is not null
-                    || operation is "call" or "jmp" or "tail.jmp" or "blr" or "br" && operands.Trim() == register
-                    || operation is "ret" && pointerReturn != false && register == (arm ? "x0" : "rax")
-                    || operation is "call" or "bl" or "blr" && IsArgument(register, arm);
+                var branchesThroughIt = operation is "call" or "jmp" or "tail.jmp" or "blr" or "br" && operands.Trim() == register;
+                var returnsIt = operation is "ret" && pointerReturn != false && register == (arm ? "x0" : "rax");
+                var passesIt = operation is "call" or "bl" or "blr" && IsArgument(register, arm);
+                var use = memoryUse is not null || branchesThroughIt || returnsIt || passesIt;
                 if (!use)
                 {
                     continue;
@@ -214,10 +214,8 @@ public static partial class NativeNormalizer
                 var fact = Find(usedValue, memory: false);
                 if (fact is null)
                 {
-                    if ((memoryUse is not null || operation is "call" or "jmp" or "tail.jmp" or "blr" or "br" &&
-                        operands.Trim() == register || value.Page
-                        || operation == "ret" && pointerReturn == true && value.Value != 0)
-                        && !constants.Contains(value.Value))
+                    var returnsPointer = operation == "ret" && pointerReturn == true && value.Value != 0;
+                    if ((memoryUse is not null || branchesThroughIt || value.Page || returnsPointer) && !constants.Contains(value.Value))
                     {
                         problems.Add("unproven pointer use through " + register);
                     }
@@ -408,8 +406,8 @@ public static partial class NativeNormalizer
         var immediateText = operands.Length == 2 && shifted.Success ? operands[1][..shifted.Index].TrimEnd() : operands[1];
         var number = relocation.Success ? relocation.Groups[2] : Number().Match(immediateText);
         var sourceIndex = line.IndexOf(operands[1], line.IndexOf(',') + 1, StringComparison.Ordinal);
-        var width32 = arm && operands[0].StartsWith('w') || !arm && (operands[0].StartsWith('e') || operands[0].StartsWith('r') &&
-            operands[0].EndsWith('d'));
+        var narrow = operands[0].StartsWith('e') || operands[0].StartsWith('r') && operands[0].EndsWith('d');
+        var width32 = arm ? operands[0].StartsWith('w') : narrow;
         var mask = width32 ? uint.MaxValue : ulong.MaxValue;
         if (operation is "mov" or "movabs" or "movz" or "movn" or "movk" && number.Success
             && TryNumber(number.Value, out var immediate))
@@ -545,12 +543,31 @@ public static partial class NativeNormalizer
     private static string Symbol(NativeAddressFact fact, ulong value) => "<" + fact.Kind + ":" + fact.Symbol
         + (value == fact.Address ? "" : "+0x" + (value - fact.Address).ToString("X", CultureInfo.InvariantCulture)) + ">";
 
-    private static string Canonical(string register, bool arm) => arm && register.StartsWith('w') ? "x" + register[1..]
-        : !arm && register.StartsWith('e') ? "r" + register[1..]
-        : !arm && register.Length == 2 && "abcd".Contains(register[0]) && "lh".Contains(register[1]) ? "r" + register[0] + "x"
-        : !arm && register is "ax" or "bx" or "cx" or "dx" or "si" or "di" or "bp" or "sp" ? "r" + register
-        : !arm && register.Length > 2 && register[0] == 'r' && char.IsDigit(register[1])
-            && register[^1] is 'd' or 'w' or 'b' ? register[..^1] : register;
+    private static string Canonical(string register, bool arm)
+    {
+        if (arm)
+        {
+            return register.StartsWith('w') ? "x" + register[1..] : register;
+        }
+
+        if (register.StartsWith('e'))
+        {
+            return "r" + register[1..];
+        }
+
+        if (register.Length == 2 && "abcd".Contains(register[0]) && "lh".Contains(register[1]))
+        {
+            return "r" + register[0] + "x";
+        }
+
+        if (register is "ax" or "bx" or "cx" or "dx" or "si" or "di" or "bp" or "sp")
+        {
+            return "r" + register;
+        }
+
+        var numbered = register.Length > 2 && register[0] == 'r' && char.IsDigit(register[1]) && register[^1] is 'd' or 'w' or 'b';
+        return numbered ? register[..^1] : register;
+    }
 
     private static bool IsArgument(string register, bool arm) =>
         arm ? register is "x0" or "x1" or "x2" or "x3" or "x4" or "x5" or "x6" or "x7"

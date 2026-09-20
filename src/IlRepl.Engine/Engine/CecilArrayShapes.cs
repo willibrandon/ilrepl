@@ -13,11 +13,15 @@ internal static class CecilArrayShapes
     /// </summary>
     /// <param name="type">The imported signature type.</param>
     /// <returns>Whether the signature contains an array.</returns>
-    public static bool ContainsArray(TypeReference type) => type is ArrayType
-        || type is TypeSpecification specification && ContainsArray(specification.ElementType)
-        || type is GenericInstanceType generic && generic.GenericArguments.Any(ContainsArray)
-        || type is FunctionPointerType pointer
-            && (ContainsArray(pointer.ReturnType) || pointer.Parameters.Any(parameter => ContainsArray(parameter.ParameterType)));
+    public static bool ContainsArray(TypeReference type) => type switch
+    {
+        ArrayType => true,
+        GenericInstanceType generic when generic.GenericArguments.Any(ContainsArray) => true,
+        FunctionPointerType pointer when ContainsArray(pointer.ReturnType)
+            || pointer.Parameters.Any(parameter => ContainsArray(parameter.ParameterType)) => true,
+        TypeSpecification specification => ContainsArray(specification.ElementType),
+        _ => false,
+    };
 
     /// <summary>
     /// Restores metadata array shapes while retaining imported owners and generic parameters.

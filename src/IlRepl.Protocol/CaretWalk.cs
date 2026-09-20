@@ -693,8 +693,15 @@ internal sealed class CaretWalk
         return CompletionSite.None;
     }
 
-    private bool HeaderEnd(int i) => i >= _r.Count || _r.IsPunct(i, '{')
-        && (i + 1 >= _r.Count || _r.IsPunct(i + 1, '}') && i + 2 >= _r.Count);
+    private bool HeaderEnd(int i)
+    {
+        if (i >= _r.Count)
+        {
+            return true;
+        }
+
+        return _r.IsPunct(i, '{') && (i + 1 >= _r.Count || _r.IsPunct(i + 1, '}') && i + 2 >= _r.Count);
+    }
 
     private bool FieldInitializerComplete(int i)
     {

@@ -234,11 +234,13 @@ public sealed partial class ReplCore
         }
         else if (entry.Kind is SessionEntryKind.Clear or SessionEntryKind.Undo or SessionEntryKind.Rollback)
         {
+            // A count of open lines is past the mark when the mark has none, or fewer.
+            static bool Past(int? lines, int? marked) => lines is { } count && (marked is null || count > marked);
             _retainedSource.RemoveAll(line => line.Mark.BodyLines > mark.BodyLines
                 || line.Mark.DeclarationLines > mark.DeclarationLines
-                || (line.Mark.OpenMethodLines is { } method && (mark.OpenMethodLines is null || method > mark.OpenMethodLines))
+                || Past(line.Mark.OpenMethodLines, mark.OpenMethodLines)
                 || (line.Mark.OpenMethodLines is not null && line.Mark.BraceSeen && !mark.BraceSeen)
-                || (line.Mark.OpenTypeLines is { } type && (mark.OpenTypeLines is null || type > mark.OpenTypeLines))
+                || Past(line.Mark.OpenTypeLines, mark.OpenTypeLines)
                 || (line.Editing && _editBlock is null));
         }
         else if (entry.Kind is SessionEntryKind.Source or SessionEntryKind.Edit or SessionEntryKind.EditSource or SessionEntryKind.Run)

@@ -169,11 +169,19 @@ internal sealed partial class ImportedMethodFamily
         }
     }
 
-    private static bool IsReflectiveMetadataPayload(MethodBase method) => method.DeclaringType is { } type
-        && type.Assembly == typeof(Type).Assembly
-        && (typeof(FieldInfo).IsAssignableFrom(type) && method.Name == nameof(FieldInfo.SetValue)
-            || type == typeof(Activator) && method.Name is nameof(Activator.CreateInstance) or nameof(Activator.CreateInstanceFrom)
-            || typeof(Assembly).IsAssignableFrom(type) && method.Name == nameof(Assembly.CreateInstance));
+    private static bool IsReflectiveMetadataPayload(MethodBase method)
+    {
+        if (method.DeclaringType is not { } type || type.Assembly != typeof(Type).Assembly)
+        {
+            return false;
+        }
+
+        var setsField = typeof(FieldInfo).IsAssignableFrom(type) && method.Name == nameof(FieldInfo.SetValue);
+        var activates = type == typeof(Activator)
+            && method.Name is nameof(Activator.CreateInstance) or nameof(Activator.CreateInstanceFrom);
+        var creates = typeof(Assembly).IsAssignableFrom(type) && method.Name == nameof(Assembly.CreateInstance);
+        return setsField || activates || creates;
+    }
 
     private bool IsCopiedMetadataMember(object value)
     {
@@ -198,8 +206,12 @@ internal sealed partial class ImportedMethodFamily
             return false;
         }
 
-        return member.DeclaringType is { } declaring && ContainsCopiedType(declaring)
-            || member.ReflectedType is { } reflected && ContainsCopiedType(reflected)
+        if (member.DeclaringType is { } declaring && ContainsCopiedType(declaring))
+        {
+            return true;
+        }
+
+        return member.ReflectedType is { } reflected && ContainsCopiedType(reflected)
             || member is MethodBase called && _methods.ContainsKey(IlAsmRenderer.DefinitionOf(called));
     }
 
@@ -234,17 +246,17 @@ internal sealed partial class ImportedMethodFamily
             return false;
         }
 
+        var namedMember = type == typeof(GC) ? method.Name == nameof(GC.KeepAlive)
+            : type == typeof(object) ? method.Name == nameof(GetType)
+            : type == typeof(Array) ? method.Name == nameof(Array.GetValue)
+            : type == typeof(RuntimeHelpers)
+                && method.Name is nameof(RuntimeHelpers.GetUninitializedObject) or nameof(RuntimeHelpers.InitializeArray);
         return typeof(MemberInfo).IsAssignableFrom(type) || typeof(ParameterInfo).IsAssignableFrom(type)
             || typeof(Assembly).IsAssignableFrom(type) || typeof(Module).IsAssignableFrom(type)
             || type == typeof(ModuleHandle) || type == typeof(IntrospectionExtensions)
             || type == typeof(RuntimeReflectionExtensions) || type == typeof(CustomAttributeExtensions)
             || type == typeof(CustomAttributeData) || type == typeof(Attribute) || type == typeof(Activator)
-            || type == typeof(Enum) || type == typeof(GC) && method.Name == nameof(GC.KeepAlive)
-            || type == typeof(object) && method.Name == nameof(GetType)
-            || type == typeof(Array) && method.Name == nameof(Array.GetValue)
-            || type == typeof(RuntimeHelpers)
-                && method.Name is nameof(RuntimeHelpers.GetUninitializedObject) or nameof(RuntimeHelpers.InitializeArray)
-            || IsObjectReferenceInspection(method);
+            || type == typeof(Enum) || namedMember || IsObjectReferenceInspection(method);
     }
 
     private void RejectMetadataBoundary(MethodEditBody body, Instruction instruction, string target, Assembly assembly)

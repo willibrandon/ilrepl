@@ -38,11 +38,15 @@ public sealed class ControlFlowOperandTableTests
                     for (var right = 0; right < 6; right++)
                     {
                         // Versioned ILVerification allowances are asserted separately from the portable operand table.
-                        var verifierAllowance = opcode is "add" or "sub" or "mul" or "and" or "add.ovf"
-                            && (left == 1 && right == 2 || left == 2 && right == 1)
-                            || opcode is "ceq" or "cgt" && left == 1 && right == 0
-                            || opcode == "ceq" && (left == 2 && right == 5 || left == 5 && right == 2)
-                            || opcode == "cgt" && left == 4 && right == 4;
+                        var objectWithPointer = left == 2 && right == 5 || left == 5 && right == 2;
+                        var verifierAllowance = opcode switch
+                        {
+                            "add" or "sub" or "mul" or "and" or "add.ovf" => left == 1 && right == 2 || left == 2 && right == 1,
+                            "ceq" => left == 1 && right == 0 || objectWithPointer,
+                            "cgt" => left == 1 && right == 0 || left == 4 && right == 4,
+                            _ => false,
+                        };
+
                         yield return [opcode, left, right, table[left][right], table[left][right] == 'Y' || verifierAllowance];
                     }
                 }

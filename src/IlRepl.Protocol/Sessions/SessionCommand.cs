@@ -38,9 +38,10 @@ public static class SessionCommand
             var isProject = path.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase)
                 || path.EndsWith(".fsproj", StringComparison.OrdinalIgnoreCase)
                 || path.EndsWith(".vbproj", StringComparison.OrdinalIgnoreCase) || Directory.Exists(path);
-            if (!isSession && (command != ".load" || (!isProject
-                && !path.StartsWith("nuget:", StringComparison.OrdinalIgnoreCase) && !words.Contains("--reload")
-                && !(referenceActions && (File.Exists(path) || path.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))))))
+            bool IsReference() => referenceActions && (File.Exists(path) || path.EndsWith(".dll", StringComparison.OrdinalIgnoreCase));
+            bool IsDependency() => isProject || path.StartsWith("nuget:", StringComparison.OrdinalIgnoreCase)
+                || words.Contains("--reload") || IsReference();
+            if (!isSession && (command != ".load" || !IsDependency()))
             {
                 return false;
             }

@@ -56,13 +56,13 @@ internal sealed partial class ImportedMethodFamily
     private static bool ReflectsMembers(MethodBase method)
     {
         var type = method.DeclaringType;
+        var createsDelegateByName = type == typeof(Delegate) && method.Name == nameof(Delegate.CreateDelegate)
+            && method.GetParameters().Any(parameter => parameter.ParameterType == typeof(string));
+        var reflectsOnType = type is not null && (typeof(Type).IsAssignableFrom(type) || type == typeof(IReflect));
+        var looksUp = method.Name.StartsWith("Get", StringComparison.Ordinal) || method.Name.StartsWith("Find", StringComparison.Ordinal)
+            || method.Name.StartsWith("get_Declared", StringComparison.Ordinal) || method.Name == nameof(Type.InvokeMember);
         return type == typeof(Activator) || type == typeof(object) && method.Name == nameof(GetType)
-            || type == typeof(Delegate) && method.Name == nameof(Delegate.CreateDelegate)
-                && method.GetParameters().Any(parameter => parameter.ParameterType == typeof(string))
-            || type is not null && (typeof(Type).IsAssignableFrom(type) || type == typeof(IReflect))
-                && (method.Name.StartsWith("Get", StringComparison.Ordinal) || method.Name.StartsWith("Find", StringComparison.Ordinal)
-                    || method.Name.StartsWith("get_Declared", StringComparison.Ordinal)
-                    || method.Name == nameof(Type.InvokeMember))
+            || createsDelegateByName || reflectsOnType && looksUp
             || type?.FullName == "System.Reflection.RuntimeReflectionExtensions";
     }
 
@@ -118,15 +118,16 @@ internal sealed partial class ImportedMethodFamily
             return referenceProblem;
         }
 
+        static bool ResolvesToken(Type type, string name) => typeof(Module).IsAssignableFrom(type)
+            ? name is nameof(Module.ResolveMethod) or nameof(Module.ResolveField) or nameof(Module.ResolveType)
+                or nameof(Module.ResolveMember) or nameof(Module.ResolveString) or nameof(Module.ResolveSignature)
+            : type == typeof(ModuleHandle) && name is nameof(ModuleHandle.ResolveMethodHandle)
+                or nameof(ModuleHandle.ResolveFieldHandle) or nameof(ModuleHandle.ResolveTypeHandle)
+                or nameof(ModuleHandle.GetRuntimeMethodHandleFromMetadataToken)
+                or nameof(ModuleHandle.GetRuntimeFieldHandleFromMetadataToken)
+                or nameof(ModuleHandle.GetRuntimeTypeHandleFromMetadataToken);
         if (method.DeclaringType is { } tokenType && tokenType.Assembly == typeof(Module).Assembly
-            && (typeof(Module).IsAssignableFrom(tokenType) && method.Name is nameof(Module.ResolveMethod) or nameof(Module.ResolveField)
-                or nameof(Module.ResolveType) or nameof(Module.ResolveMember) or nameof(Module.ResolveString)
-                or nameof(Module.ResolveSignature)
-                || tokenType == typeof(ModuleHandle) && method.Name is nameof(ModuleHandle.ResolveMethodHandle)
-                    or nameof(ModuleHandle.ResolveFieldHandle) or nameof(ModuleHandle.ResolveTypeHandle)
-                    or nameof(ModuleHandle.GetRuntimeMethodHandleFromMetadataToken)
-                    or nameof(ModuleHandle.GetRuntimeFieldHandleFromMetadataToken)
-                    or nameof(ModuleHandle.GetRuntimeTypeHandleFromMetadataToken)))
+            && ResolvesToken(tokenType, method.Name))
         {
             return "module token resolution cannot reproduce the original metadata tokens";
         }

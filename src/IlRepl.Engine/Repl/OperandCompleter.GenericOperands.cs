@@ -57,10 +57,11 @@ public sealed partial class OperandCompleter
 
         var instruction = SymbolBinder.BindInstruction(syntax, scope);
         var operand = instruction.Operand;
-        if (operand.Type is { } operandType && !MemberEligibility.Admits(operandType,
-            site with { Kind = CompletionSiteKind.Type, IsFunctionPointerReturn = false }, view)
-            || operand.Method is { } method && !MemberEligibility.Admits(method.Method, site, view)
-            || operand.Field is { } field && !MemberEligibility.Admits(field, site, view))
+        var typeIsRefused = operand.Type is { } operandType && !MemberEligibility.Admits(operandType,
+            site with { Kind = CompletionSiteKind.Type, IsFunctionPointerReturn = false }, view);
+        var methodIsRefused = operand.Method is { } method && !MemberEligibility.Admits(method.Method, site, view);
+        var fieldIsRefused = operand.Field is { } field && !MemberEligibility.Admits(field, site, view);
+        if (typeIsRefused || methodIsRefused || fieldIsRefused)
         {
             throw new ReplException("the completed operand is not valid at this instruction");
         }

@@ -206,10 +206,11 @@ internal sealed partial class ReflectionValueResolver
             return HasCopiedMetadata(body, position, 1, isCopiedMember);
         }
 
-        if (framework && (owner == typeof(Type) && name == nameof(Type.GetTypeFromHandle)
-            || owner == typeof(MethodBase) && name == nameof(MethodBase.GetMethodFromHandle)
-            || owner == typeof(FieldInfo) && name == nameof(FieldInfo.GetFieldFromHandle)
-            || owner == typeof(IntrospectionExtensions) && name == nameof(IntrospectionExtensions.GetTypeInfo)))
+        var readsHandle = owner == typeof(Type) ? name == nameof(Type.GetTypeFromHandle)
+            : owner == typeof(MethodBase) ? name == nameof(MethodBase.GetMethodFromHandle)
+            : owner == typeof(FieldInfo) ? name == nameof(FieldInfo.GetFieldFromHandle)
+            : owner == typeof(IntrospectionExtensions) && name == nameof(IntrospectionExtensions.GetTypeInfo);
+        if (framework && readsHandle)
         {
             return HasCopiedMetadata(body, position, method.GetParameters().Length, isCopiedMember);
         }

@@ -275,10 +275,11 @@ public static partial class ComparisonCapture
         // Runtime and ilrepl assemblies are supplied by the fresh host or browser bundle.
         var coreDirectory = Path.GetDirectoryName(typeof(object).Assembly.Location);
         var location = assembly.IsDynamic ? "" : assembly.Location;
-        if (assembly == typeof(ComparisonProbe).Assembly || assembly == typeof(ComparisonPackage).Assembly
-            || (!string.IsNullOrEmpty(coreDirectory) && Path.GetDirectoryName(location) == coreDirectory)
-            || (OperatingSystem.IsBrowser() && (name.Name?.StartsWith("System.", StringComparison.Ordinal) == true
-                || name.Name == "System" || name.Name == "netstandard")))
+        var ours = assembly == typeof(ComparisonProbe).Assembly || assembly == typeof(ComparisonPackage).Assembly;
+        var framework = !string.IsNullOrEmpty(coreDirectory) && Path.GetDirectoryName(location) == coreDirectory;
+        var bundled = OperatingSystem.IsBrowser() && (name.Name?.StartsWith("System.", StringComparison.Ordinal) == true
+            || name.Name is "System" or "netstandard");
+        if (ours || framework || bundled)
         {
             return;
         }

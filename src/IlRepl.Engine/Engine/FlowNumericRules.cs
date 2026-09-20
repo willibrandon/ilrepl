@@ -18,10 +18,12 @@ internal static class FlowNumericRules
         var equality = op is "ceq" or "beq" or "beq.s" or "bne.un" or "bne.un.s";
         if (Comparison(op))
         {
-            return sameNumeric || nativePair || left == StackCategory.ByRef && right == StackCategory.ByRef
-                || left == StackCategory.ObjectReference && right == StackCategory.ObjectReference && (equality || op == "cgt.un")
-                || equality && (left == StackCategory.ByRef && right == StackCategory.NativeInt
-                    || left == StackCategory.NativeInt && right == StackCategory.ByRef);
+            var pointers = left == StackCategory.ByRef && right == StackCategory.ByRef;
+            var references = left == StackCategory.ObjectReference && right == StackCategory.ObjectReference
+                && (equality || op == "cgt.un");
+            var pointerWithNativeInt = left == StackCategory.ByRef && right == StackCategory.NativeInt
+                || left == StackCategory.NativeInt && right == StackCategory.ByRef;
+            return sameNumeric || nativePair || pointers || references || equality && pointerWithNativeInt;
         }
 
         if (op is "shl" or "shr" or "shr.un")
@@ -34,13 +36,16 @@ internal static class FlowNumericRules
             // ECMA-335 table III.7 keeps these unsigned overflow forms as correct but unverifiable pointer arithmetic.
             var addition = op is "add" or "add.ovf.un";
             var subtraction = op is "sub" or "sub.ovf.un";
-            return left == StackCategory.ByRef && right == StackCategory.ByRef && subtraction
-                || left == StackCategory.ByRef && right is StackCategory.Int32 or StackCategory.NativeInt && (addition || subtraction)
-                || right == StackCategory.ByRef && left is StackCategory.Int32 or StackCategory.NativeInt && addition;
+            var pointerDifference = left == StackCategory.ByRef && right == StackCategory.ByRef && subtraction;
+            var pointerAndOffset = left == StackCategory.ByRef && right is StackCategory.Int32 or StackCategory.NativeInt
+                && (addition || subtraction);
+            var offsetAndPointer = right == StackCategory.ByRef && left is StackCategory.Int32 or StackCategory.NativeInt && addition;
+            return pointerDifference || pointerAndOffset || offsetAndPointer;
         }
 
         var integral = op is "and" or "or" or "xor" or "div.un" or "rem.un" || op.Contains("ovf", StringComparison.Ordinal);
-        return (sameNumeric || nativePair) && (!integral || integerLeft && integerRight);
+        var integers = integerLeft && integerRight;
+        return (sameNumeric || nativePair) && (!integral || integers);
     }
 
     /// <summary>

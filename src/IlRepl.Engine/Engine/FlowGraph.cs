@@ -697,8 +697,8 @@ internal sealed partial class FlowGraph<T> where T : class
             || op == "ldelema";
         var typeCheck = op is "castclass" or "unbox" or "ldelema" or "stelem" or "stelem.ref";
         var nullCheck = array || op is "ldfld" or "stfld" or "callvirt" or "ldvirtftn";
-        return ((checks & 0x01) == 0 || typeCheck) && ((checks & 0x02) == 0 || array)
-            && ((checks & 0x04) == 0 || nullCheck);
+        bool Holds(int check, bool result) => (checks & check) == 0 || result;
+        return Holds(0x01, typeCheck) && Holds(0x02, array) && Holds(0x04, nullCheck);
     }
 
     private bool IsFirstInstruction(int target, int start)

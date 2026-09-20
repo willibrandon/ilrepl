@@ -40,9 +40,11 @@ internal sealed partial class ImportedMethodFamily
         pending.Enqueue(target);
         while (pending.TryDequeue(out var method))
         {
-            if (method.DeclaringType is { } owner && (!method.IsStatic && ContainsCopiedType(owner)
-                    || owner.IsConstructedGenericType && owner.GetGenericArguments().Any(ContainsCopiedType))
-                || method.IsGenericMethod && method.GetGenericArguments().Any(ContainsCopiedType))
+            var owner = method.DeclaringType;
+            var receiverIsCopied = owner is not null && !method.IsStatic && ContainsCopiedType(owner);
+            var ownerArgumentIsCopied = owner is { IsConstructedGenericType: true } && owner.GetGenericArguments().Any(ContainsCopiedType);
+            var methodArgumentIsCopied = method.IsGenericMethod && method.GetGenericArguments().Any(ContainsCopiedType);
+            if (receiverIsCopied || ownerArgumentIsCopied || methodArgumentIsCopied)
             {
                 return true;
             }

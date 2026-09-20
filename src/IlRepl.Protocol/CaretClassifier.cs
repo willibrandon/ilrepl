@@ -34,8 +34,9 @@ public sealed class CaretClassifier
             var closedBlock = segment.Kind == CilSegmentKind.BlockComment
                 && (segment.Length >= 4 || segment.Start == 0 && inBlockComment)
                 && line.AsSpan(segment.Start, segment.Length).EndsWith("*/", StringComparison.Ordinal);
+            var beforeEnd = caret < segment.End || caret == segment.End && !closedBlock;
             if (segment.Kind is CilSegmentKind.LineComment or CilSegmentKind.BlockComment
-                && (segment.Start < caret || caret == 0) && (caret < segment.End || caret == segment.End && !closedBlock))
+                && (segment.Start < caret || caret == 0) && beforeEnd)
             {
                 return CompletionSite.None with { Caret = caret };
             }

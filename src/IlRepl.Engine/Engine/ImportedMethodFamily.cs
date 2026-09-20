@@ -515,11 +515,10 @@ internal sealed partial class ImportedMethodFamily
                     var accessible = MemberAccess.MethodVerdict(new ResolvedMethod(target, null), body.State.Member!.Scope,
                         _session.TypeTable, judgeAll: true) is null;
                     var initialization = _initializationMethods.Contains(body.Method) && target.Module == body.Method.Module;
-                    var copy = initialization || resolved.IsSessionMethod || _types.ContainsKey(owner)
-                        || !_externalTypes.Contains(owner) && (TypeRelations.IsSessionType(owner)
-                            || (owner.Assembly == body.Method.Module.Assembly && ((!target.IsPublic && !((target.IsFamily
-                                || target.IsFamilyOrAssembly) && accessible))
-                                || !owner.IsVisible)));
+                    var inaccessible = !target.IsPublic && !((target.IsFamily || target.IsFamilyOrAssembly) && accessible);
+                    var hidden = owner.Assembly == body.Method.Module.Assembly && (inaccessible || !owner.IsVisible);
+                    var ownedHere = !_externalTypes.Contains(owner) && (TypeRelations.IsSessionType(owner) || hidden);
+                    var copy = initialization || resolved.IsSessionMethod || _types.ContainsKey(owner) || ownedHere;
                     if (copy)
                     {
                         try
@@ -546,9 +545,9 @@ internal sealed partial class ImportedMethodFamily
                 {
                     var owner = DefinitionOf(field.DeclaringType!);
                     var initialization = _initializationMethods.Contains(body.Method) && field.Module == body.Method.Module;
-                    var copy = initialization || _types.ContainsKey(owner)
-                        || !_externalTypes.Contains(owner) && (TypeRelations.IsSessionType(owner)
-                            || (owner.Assembly == body.Method.Module.Assembly && (!field.IsPublic || !owner.IsVisible)));
+                    var hidden = owner.Assembly == body.Method.Module.Assembly && (!field.IsPublic || !owner.IsVisible);
+                    var ownedHere = !_externalTypes.Contains(owner) && (TypeRelations.IsSessionType(owner) || hidden);
+                    var copy = initialization || _types.ContainsKey(owner) || ownedHere;
                     if (copy)
                     {
                         AddType(owner);
@@ -668,12 +667,28 @@ internal sealed partial class ImportedMethodFamily
         }
     }
 
-    private bool ContainsCopiedType(Type type) => type.HasElementType ? ContainsCopiedType(type.GetElementType()!)
-        : TypeNameFormatter.IsFunctionPointer(type) ? ContainsCopiedType(type.GetFunctionPointerReturnType())
-            || type.GetFunctionPointerParameterTypes().Any(ContainsCopiedType)
-            || type.GetFunctionPointerCallingConventions().Any(ContainsCopiedType)
-        : !type.IsGenericParameter && (_types.ContainsKey(DefinitionOf(type)) || (type.IsConstructedGenericType
-            && type.GetGenericArguments().Any(ContainsCopiedType)));
+    private bool ContainsCopiedType(Type type)
+    {
+        if (type.HasElementType)
+        {
+            return ContainsCopiedType(type.GetElementType()!);
+        }
+
+        if (TypeNameFormatter.IsFunctionPointer(type))
+        {
+            return ContainsCopiedType(type.GetFunctionPointerReturnType())
+                || type.GetFunctionPointerParameterTypes().Any(ContainsCopiedType)
+                || type.GetFunctionPointerCallingConventions().Any(ContainsCopiedType);
+        }
+
+        if (type.IsGenericParameter)
+        {
+            return false;
+        }
+
+        return _types.ContainsKey(DefinitionOf(type))
+            || type.IsConstructedGenericType && type.GetGenericArguments().Any(ContainsCopiedType);
+    }
 
     /// <summary>
     /// Compiles the copied family against its own dependency context and honors deferred activation.

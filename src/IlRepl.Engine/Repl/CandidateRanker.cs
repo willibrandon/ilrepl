@@ -125,9 +125,9 @@ public static class CandidateRanker
     {
         var current = name[position];
         var previous = name[position - 1];
-        return char.IsUpper(current) && (!char.IsUpper(previous)
-                || position + 1 < name.Length && char.IsLower(name[position + 1]))
-            || char.IsLetterOrDigit(current) && previous is '_' or '.' or '/' or '<' or '>' or '`'
-            || char.IsDigit(current) && !char.IsDigit(previous);
+        var beforeLower = position + 1 < name.Length && char.IsLower(name[position + 1]);
+        var startsWord = char.IsUpper(current) && (!char.IsUpper(previous) || beforeLower);
+        var followsSeparator = char.IsLetterOrDigit(current) && previous is '_' or '.' or '/' or '<' or '>' or '`';
+        return startsWord || followsSeparator || char.IsDigit(current) && !char.IsDigit(previous);
     }
 }

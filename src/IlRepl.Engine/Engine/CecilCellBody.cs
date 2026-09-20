@@ -28,17 +28,20 @@ internal static class CecilCellBody
 
         foreach (var entry in state.Entries)
         {
-            if (entry.Instruction?.DecodedPrefixName is not null
-                || entry.Instruction?.ExactTypeOperand is not null
-                || entry.Instruction?.ExactFieldDeclaringType is not null
-                || entry.Instruction?.Operand is CalliSignature { ExactSymbol: { } exact }
-                    && RuntimeSymbolTypes.RequiresExact(exact)
-                || entry.Instruction?.Operand is ResolvedMethod { ExactGenericArguments: not null }
-                || entry.Instruction?.Operand is ResolvedMethod { ExactDeclaringType: not null }
-                || entry.Instruction?.Operand is ResolvedMethod { ExactOptionalParameterTypes: { } optional }
-                    && optional.Any(RuntimeSymbolTypes.RequiresExact)
-                || entry.Instruction?.Operand is ResolvedMethod methodOperand && RequiresMetadata(methodOperand)
-                || entry.Instruction?.Operand is FieldInfo fieldOperand && RequiresMetadata(fieldOperand))
+            var exactInstruction = entry.Instruction?.DecodedPrefixName is not null || entry.Instruction?.ExactTypeOperand is not null
+                || entry.Instruction?.ExactFieldDeclaringType is not null;
+            var exactOperand = entry.Instruction?.Operand switch
+            {
+                CalliSignature { ExactSymbol: { } exact } => RuntimeSymbolTypes.RequiresExact(exact),
+                ResolvedMethod { ExactGenericArguments: not null } or ResolvedMethod { ExactDeclaringType: not null } => true,
+                ResolvedMethod { ExactOptionalParameterTypes: { } optional } methodOperand =>
+                    optional.Any(RuntimeSymbolTypes.RequiresExact) || RequiresMetadata(methodOperand),
+                ResolvedMethod methodOperand => RequiresMetadata(methodOperand),
+                FieldInfo fieldOperand => RequiresMetadata(fieldOperand),
+                _ => false,
+            };
+
+            if (exactInstruction || exactOperand)
             {
                 return true;
             }

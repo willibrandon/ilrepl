@@ -136,12 +136,13 @@ internal static class JumpCompatibility
         bool Match(TypeSymbol first, TypeSymbol second) => MatchType(first, second, definition, substitutions);
         bool MatchList(IReadOnlyList<TypeSymbol> first, IReadOnlyList<TypeSymbol> second) => first.Count == second.Count
             && first.Zip(second).All(pair => Match(pair.First, pair.Second));
-        if (target.Kind != current.Kind
-            || target.Element is { } element && !Match(element, current.Element!)
-            || !MatchList(target.Arguments, current.Arguments)
-            || target.Modifier is { } modifier && !Match(modifier, current.Modifier!)
-            || target.Signature is { } signature && (!Match(signature.ReturnType, current.Signature!.ReturnType)
-                || !MatchList(signature.Parameters, current.Signature.Parameters)))
+        bool MatchPart(TypeSymbol? first, TypeSymbol? second) => first is null || Match(first, second!);
+        bool MatchSignature() => target.Signature is not { } signature
+            || Match(signature.ReturnType, current.Signature!.ReturnType)
+                && MatchList(signature.Parameters, current.Signature.Parameters);
+        var matches = target.Kind == current.Kind && MatchPart(target.Element, current.Element)
+            && MatchList(target.Arguments, current.Arguments) && MatchPart(target.Modifier, current.Modifier) && MatchSignature();
+        if (!matches)
         {
             return false;
         }

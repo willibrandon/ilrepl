@@ -166,13 +166,34 @@ internal sealed partial class ImportedMethodFamily
             return false;
         }
 
-        return typeof(MethodBase).IsAssignableFrom(type) && method.Name is nameof(MethodBase.Invoke) or nameof(MethodInfo.CreateDelegate)
-            || typeof(PropertyInfo).IsAssignableFrom(type) && method.Name == nameof(PropertyInfo.GetValue)
-            || (typeof(Type).IsAssignableFrom(type) || type == typeof(IReflect)) && method.Name == nameof(Type.InvokeMember)
-            || type == typeof(Delegate) && method.Name is nameof(Delegate.CreateDelegate) or nameof(Delegate.DynamicInvoke)
-            || type == typeof(RuntimeMethodHandle) && method.Name == nameof(RuntimeMethodHandle.GetFunctionPointer)
-            || (type == typeof(MethodInvoker) || type == typeof(ConstructorInvoker))
-                && method.Name is nameof(MethodInvoker.Create) or nameof(MethodInvoker.Invoke);
+        // Each of these types has its own way to run a method it was handed.
+        if (typeof(MethodBase).IsAssignableFrom(type))
+        {
+            return method.Name is nameof(MethodBase.Invoke) or nameof(MethodInfo.CreateDelegate);
+        }
+
+        if (typeof(PropertyInfo).IsAssignableFrom(type))
+        {
+            return method.Name == nameof(PropertyInfo.GetValue);
+        }
+
+        if (typeof(Type).IsAssignableFrom(type) || type == typeof(IReflect))
+        {
+            return method.Name == nameof(Type.InvokeMember);
+        }
+
+        if (type == typeof(Delegate))
+        {
+            return method.Name is nameof(Delegate.CreateDelegate) or nameof(Delegate.DynamicInvoke);
+        }
+
+        if (type == typeof(RuntimeMethodHandle))
+        {
+            return method.Name == nameof(RuntimeMethodHandle.GetFunctionPointer);
+        }
+
+        return (type == typeof(MethodInvoker) || type == typeof(ConstructorInvoker))
+            && method.Name is nameof(MethodInvoker.Create) or nameof(MethodInvoker.Invoke);
     }
 
     private void ValidateIndirectReflection()
