@@ -249,6 +249,7 @@ public sealed class ExecutionProgressTests
             }
             catch (OperationCanceledException) when (pending.IsCanceled)
             {
+                // The test cancelled this call itself, and only needs it to have ended.
             }
         }
     }

@@ -261,6 +261,7 @@ public sealed partial class HostProcessEngine : IReplEngine
                 }
                 catch (OperationCanceledException)
                 {
+                    // The accept was cancelled together with the timeout.
                 }
 
                 throw new IOException("the host exited before connecting");
@@ -280,6 +281,7 @@ public sealed partial class HostProcessEngine : IReplEngine
             }
             catch (OperationCanceledException) when (timeout.IsCancellationRequested)
             {
+                // The host answered, so the watch for an early exit was cancelled with the timeout.
             }
 
             var engine = new HostProcessEngine(process, rpc, host, stderr, owned.Drained, hello, listener, connection,
@@ -299,6 +301,7 @@ public sealed partial class HostProcessEngine : IReplEngine
                 }
                 catch (OperationCanceledException) when (timeout.IsCancellationRequested)
                 {
+                    // The watch for an early exit was cancelled with the timeout.
                 }
             }
 

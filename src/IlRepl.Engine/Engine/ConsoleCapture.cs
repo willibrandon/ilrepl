@@ -80,6 +80,7 @@ public sealed class ConsoleCapture : IDisposable
             }
             catch (PlatformNotSupportedException)
             {
+                // This platform has no console input to replace. Output is routed all the same.
             }
 
             s_installed = true;

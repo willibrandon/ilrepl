@@ -50,6 +50,7 @@ internal static class WorkerOwnerWatchdog
             }
             catch (ArgumentException)
             {
+                // The owner is already gone, which is what this thread waits for.
             }
 
             using var group = new OwnedProcessGroup();

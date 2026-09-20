@@ -169,9 +169,11 @@ public sealed class LocalSocketListener : IDisposable
         }
         catch (DirectoryNotFoundException)
         {
+            // The directory is already gone, and the socket with it.
         }
         catch (FileNotFoundException)
         {
+            // The socket is already gone.
         }
     }
 }

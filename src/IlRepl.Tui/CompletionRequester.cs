@@ -460,6 +460,7 @@ public sealed class CompletionRequester
         }
         catch (OperationCanceledException) when (_watchCancellation.IsCancellationRequested)
         {
+            // Disposal ends the watch.
         }
         catch (Exception exception) when (exception is not (OutOfMemoryException or StackOverflowException or AccessViolationException))
         {

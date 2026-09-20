@@ -183,6 +183,7 @@ public sealed class AnalysisRequester(IReplEngine engine)
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
+            // A newer request replaced this one, and its reply stays empty.
         }
         catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
         {

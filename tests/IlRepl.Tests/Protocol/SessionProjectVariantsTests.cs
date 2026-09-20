@@ -266,6 +266,7 @@ public sealed class SessionProjectVariantsTests
             }
             catch (OperationCanceledException)
             {
+                // The test cancelled this load itself, and only needs it to have ended.
             }
         }
     }

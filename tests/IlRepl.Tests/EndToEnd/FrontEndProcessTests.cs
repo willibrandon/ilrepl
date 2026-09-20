@@ -451,6 +451,7 @@ public sealed class FrontEndProcessTests
             }
             catch (OperationCanceledException) when (waiting.IsCancellationRequested)
             {
+                // The wait for a prompt was cancelled here because the process had already ended.
             }
         }
     }

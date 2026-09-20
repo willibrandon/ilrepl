@@ -191,6 +191,7 @@ public sealed partial class HostServer : IReplHost, IAsyncDisposable
             }
             catch (TimeoutException)
             {
+                // The engine did not settle in time. The check below sees that and leaves through the hard exit.
             }
 
             if (!settled || !OwnedProcessGroup.IsRunning(frontendOwner))

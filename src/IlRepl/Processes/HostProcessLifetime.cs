@@ -264,6 +264,7 @@ public sealed class HostProcessLifetime : IProcessSupervision, IAsyncDisposable
         }
         catch (Exception exception) when (exception is OperationCanceledException or ReplEngineException or ObjectDisposedException)
         {
+            // Disposal ended the watch, or the restore failed and has published the degraded state itself.
         }
     }
 
@@ -316,6 +317,7 @@ public sealed class HostProcessLifetime : IProcessSupervision, IAsyncDisposable
                 }
                 catch (ConnectionLostException)
                 {
+                    // The supervisor is gone, and its processes went with it or are stopped below.
                 }
             }
 
@@ -353,6 +355,7 @@ public sealed class HostProcessLifetime : IProcessSupervision, IAsyncDisposable
         }
         catch (Exception exception) when (exception is ConnectionLostException or OperationCanceledException or InvalidOperationException)
         {
+            // The supervisor cannot say any more, so the exit code stays unknown.
         }
 
         try
@@ -361,6 +364,7 @@ public sealed class HostProcessLifetime : IProcessSupervision, IAsyncDisposable
         }
         catch (Exception exception) when (exception is ConnectionLostException or OperationCanceledException or InvalidOperationException)
         {
+            // The supervisor cannot send any more, so the diagnostics received so far stand.
         }
 
         return code;

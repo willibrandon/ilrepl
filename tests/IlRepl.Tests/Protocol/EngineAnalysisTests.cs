@@ -83,6 +83,7 @@ public sealed class EngineAnalysisTests
         }
         catch (OperationCanceledException)
         {
+            // The test cancelled this work itself, and only needs it to have ended.
         }
     }
 

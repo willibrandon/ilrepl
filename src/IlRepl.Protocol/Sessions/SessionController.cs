@@ -779,6 +779,7 @@ public sealed partial class SessionController : IReplEngine
             }
             catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
             {
+                // Disposal cancelled the restart that it was waiting for.
             }
         }
 

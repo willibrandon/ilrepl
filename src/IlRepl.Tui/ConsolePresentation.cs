@@ -165,6 +165,7 @@ internal sealed class ConsolePresentation : IHex1bTerminalPresentationAdapter, I
             }
             catch (OperationCanceledException) when (probe.IsCancellationRequested && !ct.IsCancellationRequested)
             {
+                // The terminal did not answer the probe in time, and it is used without that answer.
             }
 
             ct.ThrowIfCancellationRequested();

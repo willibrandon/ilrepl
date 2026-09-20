@@ -39,6 +39,7 @@ internal static class LifetimeSupervisorProgram
         }
         catch (Exception exception) when (exception is IOException or OperationCanceledException)
         {
+            // The frontend closed the connection or went away, which the check below tells apart.
         }
 
         service.PreserveOnDispose = OwnedProcessGroup.IsRunning(new OwnedProcessScope("frontend", frontendId, frontendStart, null));

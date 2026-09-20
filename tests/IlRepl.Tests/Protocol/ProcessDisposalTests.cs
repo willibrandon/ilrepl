@@ -207,6 +207,7 @@ public sealed class ProcessDisposalTests
                 }
                 catch (IOException)
                 {
+                    // The test made this cleanup fail on purpose, and the failure was asserted above.
                 }
             }
 
@@ -216,6 +217,7 @@ public sealed class ProcessDisposalTests
             }
             catch (IOException)
             {
+                // The test made this cleanup fail on purpose, and the failure was asserted above.
             }
 
             foreach (var child in new[] { supervisor, adoptedSupervisor }.OfType<Process>())

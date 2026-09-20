@@ -480,6 +480,7 @@ public sealed class AnalysisRequesterTests
             }
             catch (OperationCanceledException) when (terminalCancellation.IsCancellationRequested)
             {
+                // The test stopped the terminal itself, and the cancellation that follows is the expected way for the run to end.
             }
 
             Trace("after app stopped");

@@ -151,9 +151,11 @@ internal sealed class SessionAuthenticatedFeed : IAsyncDisposable
         }
         catch (OperationCanceledException) when (_stop.IsCancellationRequested)
         {
+            // Disposal stopped the feed while it was serving a request.
         }
         catch (SocketException) when (_stop.IsCancellationRequested)
         {
+            // Disposal closed the listener while it was serving a request.
         }
     }
 

@@ -435,6 +435,7 @@ public static class ProcessNativeRunner
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
+            // User code can leave files that cannot be deleted, and the report does not depend on them.
         }
 
         return report;

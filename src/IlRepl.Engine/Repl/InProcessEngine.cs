@@ -356,6 +356,7 @@ public sealed partial class InProcessEngine : IReplEngine, IInterruptibleEngine
         }
         catch (OperationCanceledException) when (_warmupCancellation.IsCancellationRequested)
         {
+            // A changed session cancels the warmup, and the next one starts from the new state.
         }
         catch (Exception exception) when (ReplRecovery.IsRecoverable(exception))
         {
@@ -396,6 +397,7 @@ public sealed partial class InProcessEngine : IReplEngine, IInterruptibleEngine
         }
         catch (OperationCanceledException) when (_shutdown.IsCancellationRequested)
         {
+            // Shutdown cancelled these analyses, and nobody waits for their results any more.
         }
         catch (Exception exception) when (ReplRecovery.IsRecoverable(exception))
         {

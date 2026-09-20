@@ -103,6 +103,7 @@ public sealed class HostCompletionTests
             }
             catch (RemoteInvocationException)
             {
+                // The injected checkpoint fault fails this request, which the test asserted above when it got that far.
             }
         }
     }
@@ -176,6 +177,7 @@ public sealed class HostCompletionTests
             }
             catch (OperationCanceledException)
             {
+                // The test cancelled this request itself, and only needs it to have ended.
             }
         }
     }

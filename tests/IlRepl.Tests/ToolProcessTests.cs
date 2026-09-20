@@ -65,6 +65,7 @@ public sealed class ToolProcessTests
             }
             catch (OperationCanceledException)
             {
+                // The test cancelled this run itself, and only needs it to have ended.
             }
 
             Directory.Delete(directory, recursive: true);

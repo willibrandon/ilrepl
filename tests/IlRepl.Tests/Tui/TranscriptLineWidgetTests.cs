@@ -124,6 +124,7 @@ public sealed class TranscriptLineWidgetTests
             }
             catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
             {
+                // The test stopped the terminal itself, and the cancellation that follows is the expected way for the run to end.
             }
         }
 
@@ -223,6 +224,7 @@ public sealed class TranscriptLineWidgetTests
             }
             catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
             {
+                // The test stopped the terminal itself, and the cancellation that follows is the expected way for the run to end.
             }
         }
     }

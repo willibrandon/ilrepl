@@ -84,6 +84,7 @@ public sealed class CompletionDetailEvidenceTests
             }
             catch (OperationCanceledException) when (terminalCancellation.IsCancellationRequested)
             {
+                // The test stopped the terminal itself, and the cancellation that follows is the expected way for the run to end.
             }
 
             await IlReplApp.SettleAsync(prompt);
@@ -178,6 +179,7 @@ public sealed class CompletionDetailEvidenceTests
             }
             catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
             {
+                // The test stopped the terminal itself, and the cancellation that follows is the expected way for the run to end.
             }
 
             await IlReplApp.SettleAsync(prompt);
