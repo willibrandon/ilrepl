@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  CI runs four tests at a time on every runner. MSTest's own choice is one per processor, which is four on every runner
+  but the macOS one. That runner has three, and it also needs the most time for each test that starts a process.
+  A plain dotnet test does not read this file.
+-->
+<RunSettings>
+  <MSTest>
+    <Parallelize>
+      <Workers>4</Workers>
+      <Scope>MethodLevel</Scope>
+    </Parallelize>
+  </MSTest>
+</RunSettings>

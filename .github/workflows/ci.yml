@@ -50,7 +50,7 @@ jobs:
       - name: Test
         run: >-
           dotnet test --project tests/IlRepl.Tests/IlRepl.Tests.csproj -c Release
-          --report-trx --results-directory TestResults
+          --settings .github/ci.runsettings --report-trx --results-directory TestResults
 
       - name: Upload test results
         if: always()
@@ -85,7 +85,7 @@ jobs:
           sh -c 'apk add --no-cache build-base icu-libs libstdc++ &&
           dotnet run --file scripts/Generate-BootstrapCatalog.cs -c Release -- --check &&
           dotnet test --project tests/IlRepl.Tests/IlRepl.Tests.csproj -c Release
-          --report-trx --results-directory TestResults'
+          --settings .github/ci.runsettings --report-trx --results-directory TestResults'
 
       - name: Upload test results
         if: always()
