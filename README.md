@@ -215,7 +215,7 @@ Repository utilities are file-based apps documented in [scripts/README.md](scrip
 dotnet run --file scripts/Generate-BootstrapCatalog.cs -- --check
 dotnet run --file scripts/Generate-OpcodeReference.cs
 dotnet run --file scripts/Publish-Wasm.cs
-dotnet run --file scripts/Publish-NativeAot.cs -- --rid osx-arm64 --package-version 0.5.3
+dotnet run --file scripts/Publish-NativeAot.cs -- --rid osx-arm64 --package-version 0.5.4
 ```
 
 ## License
