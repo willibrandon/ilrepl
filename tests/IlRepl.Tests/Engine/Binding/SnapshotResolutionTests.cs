@@ -360,9 +360,8 @@ public sealed class SnapshotResolutionTests
         })
         {
             var expected = RuntimeSymbolImporter.Import(type);
-            var located = snapshot.Catalog.Locate(expected);
-            Assert.IsNotNull(located, type.Name);
-            var actual = located.Value.Source.Definition(located.Value.Handle);
+            var located = Required.Value(snapshot.Catalog.Locate(expected), type.Name);
+            var actual = located.Source.Definition(located.Handle);
             Assert.AreEqual(expected, actual, type.Name);
             Assert.AreEqual(expected.Name, actual.Name, type.Name);
             Assert.AreEqual(expected.Namespace, actual.Namespace, type.Name);

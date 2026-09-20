@@ -33,7 +33,7 @@ public sealed partial class EditingSession
             foreach (var line in original.Lines)
             {
                 var node = position < original.FlowNodes.Count ? original.FlowNodes[position] : null;
-                _replayLocation = node?.Source == line ? node.Location : null;
+                _replayLocation = node is not null && node.Source == line ? node.Location : null;
                 _replaySourceKind = _replayLocation is null ? null : node!.SourceKind;
                 if (_replayLocation is not null)
                 {

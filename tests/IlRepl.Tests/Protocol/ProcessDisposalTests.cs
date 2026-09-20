@@ -222,13 +222,13 @@ public sealed class ProcessDisposalTests
 
             foreach (var child in new[] { supervisor, adoptedSupervisor }.OfType<Process>())
             {
+                using var handle = child;
                 if (!child.HasExited)
                 {
                     child.Kill();
                 }
 
                 await child.WaitForExitAsync(CancellationToken.None);
-                child.Dispose();
             }
         }
     }

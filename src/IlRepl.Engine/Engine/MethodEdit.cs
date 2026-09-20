@@ -93,16 +93,19 @@ public sealed class MethodEdit
     /// <exception cref="ReplException">The scenario cannot call both versions with the same signature.</exception>
     internal void RequireScenarioSignature()
     {
-        var original = Original.Requested as MethodInfo;
-        var edited = Method as MethodInfo;
-        var before = original?.GetParameters();
-        var after = edited?.GetParameters();
-        if (original is null || edited is null || original.CallingConvention != edited.CallingConvention
-            || before!.Length != after!.Length || !SameParameter(original.ReturnParameter, edited.ReturnParameter)
-            || before.Where((parameter, index) => !SameParameter(parameter, after[index])).Any()
-            || !SameGenerics(original, edited))
+        if (Original.Requested is not MethodInfo original || Method is not MethodInfo edited || !SameSignature(original, edited))
         {
             throw new ReplException("the original and edited signatures must match to compare this method through a scenario");
+        }
+
+        bool SameSignature(MethodInfo first, MethodInfo second)
+        {
+            var before = first.GetParameters();
+            var after = second.GetParameters();
+            return first.CallingConvention == second.CallingConvention && before.Length == after.Length
+                && SameParameter(first.ReturnParameter, second.ReturnParameter)
+                && before.Zip(after).All(pair => SameParameter(pair.First, pair.Second))
+                && SameGenerics(first, second);
         }
 
         bool SameType(Type first, Type second) => TypeKey(first) == Current!.NormalizeNames(TypeKey(second));

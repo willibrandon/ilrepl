@@ -33,55 +33,43 @@ internal sealed partial class StructuralObservation
 
         var members = new List<ObservedMember> { new("comparer", Capture(comparer, depth + 1)) };
         var iterator = (IEnumerator)lookup.GetMethod(nameof(IEnumerable.GetEnumerator), Type.EmptyTypes)!.Invoke(value, null)!;
-        try
+        using var iteratorLifetime = iterator as IDisposable;
+        var index = 0;
+        while (iterator.MoveNext())
         {
-            var index = 0;
-            while (iterator.MoveNext())
+            if (_nodes >= MaximumNodes)
+            {
+                members.Add(new ObservedMember("remaining", Unavailable(name, "lookup exceeds the observation limit")));
+                break;
+            }
+
+            var grouping = iterator.Current!;
+            var groupMembers = new List<ObservedMember>
+            {
+                new("key", Capture(grouping.GetType().GetProperty("Key")!.GetValue(grouping), depth + 2)),
+            };
+
+            var elements = ((IEnumerable)grouping).GetEnumerator();
+            using var elementsLifetime = elements as IDisposable;
+            var element = 0;
+            while (elements.MoveNext())
             {
                 if (_nodes >= MaximumNodes)
                 {
-                    members.Add(new ObservedMember("remaining", Unavailable(name, "lookup exceeds the observation limit")));
+                    groupMembers.Add(new ObservedMember("remaining",
+                        Unavailable(name, "lookup exceeds the observation limit")));
                     break;
                 }
 
-                var grouping = iterator.Current!;
-                var groupMembers = new List<ObservedMember>
-                {
-                    new("key", Capture(grouping.GetType().GetProperty("Key")!.GetValue(grouping), depth + 2)),
-                };
-
-                var elements = ((IEnumerable)grouping).GetEnumerator();
-                try
-                {
-                    var element = 0;
-                    while (elements.MoveNext())
-                    {
-                        if (_nodes >= MaximumNodes)
-                        {
-                            groupMembers.Add(new ObservedMember("remaining",
-                                Unavailable(name, "lookup exceeds the observation limit")));
-                            break;
-                        }
-
-                        groupMembers.Add(new ObservedMember(element.ToString(CultureInfo.InvariantCulture),
-                            Capture(elements.Current, depth + 2)));
-                        element++;
-                    }
-                }
-                finally
-                {
-                    (elements as IDisposable)?.Dispose();
-                }
-
-                _nodes++;
-                members.Add(new ObservedMember(index.ToString(CultureInfo.InvariantCulture),
-                    new ObservedValue("group", "", null, null, groupMembers)));
-                index++;
+                groupMembers.Add(new ObservedMember(element.ToString(CultureInfo.InvariantCulture),
+                    Capture(elements.Current, depth + 2)));
+                element++;
             }
-        }
-        finally
-        {
-            (iterator as IDisposable)?.Dispose();
+
+            _nodes++;
+            members.Add(new ObservedMember(index.ToString(CultureInfo.InvariantCulture),
+                new ObservedValue("group", "", null, null, groupMembers)));
+            index++;
         }
 
         return new ObservedValue("lookup", name, null, identity, members);

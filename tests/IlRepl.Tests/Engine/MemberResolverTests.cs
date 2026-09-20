@@ -48,8 +48,8 @@ public sealed class MemberResolverTests
     [TestMethod]
     public void ResolveMethod_ReturnTypeNarrows()
     {
-        var method = MemberResolver.ResolveMethod("int64 Math::Abs(int64)", Context, false).Method as MethodInfo;
-        Assert.IsNotNull(method);
+        var method = Required.Value(MemberResolver.ResolveMethod("int64 Math::Abs(int64)", Context, false).Method as MethodInfo,
+            "The resolved method");
         Assert.AreEqual(typeof(long), method.ReturnType);
     }
 
@@ -73,7 +73,7 @@ public sealed class MemberResolverTests
     {
         var method = MemberResolver.ResolveMethod("!!0 [System.Linq]System.Linq.Enumerable::First<int32>(class IEnumerable`1<!!0>)",
             Context, false).Method as MethodInfo;
-        Assert.IsNotNull(method);
+        method = Required.Value(method, "The resolved method");
         Assert.IsTrue(method.IsGenericMethod);
         Assert.AreEqual(typeof(int), method.ReturnType);
     }

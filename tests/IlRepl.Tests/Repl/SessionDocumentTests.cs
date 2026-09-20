@@ -226,7 +226,7 @@ public sealed class SessionDocumentTests
             Assert.IsTrue(result.Succeeded, string.Join('\n', result.Lines.Select(item => item.PlainText)));
         }
 
-        Assert.IsNotNull(result);
+        result = Required.Value(result, "The last reply");
         Assert.Contains(line => line.Kind == LineKind.Result && line.PlainText.Contains("= 42 : int32", StringComparison.Ordinal),
             result.Lines);
     }

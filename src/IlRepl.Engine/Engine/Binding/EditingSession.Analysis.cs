@@ -151,7 +151,7 @@ public sealed partial class EditingSession
             }
 
             var result = caretBindingsStale ? null : caretBody.Analysis!;
-            var incoming = result?.Before[Math.Min(caretPosition, result.Before.Length - 1)];
+            var incoming = result is null ? null : result.Before[Math.Min(caretPosition, result.Before.Length - 1)];
             _caretFlow = incoming;
             var stack = caretBindingsStale
                 ? new AnalyzedStack(AnalyzedStackKind.Unknown, [], true)

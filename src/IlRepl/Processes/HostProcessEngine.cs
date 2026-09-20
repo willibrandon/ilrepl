@@ -502,20 +502,17 @@ public sealed partial class HostProcessEngine : IReplEngine
         await StopWatchingDiagnosticsAsync().ConfigureAwait(false);
         try
         {
-            try
+            using (_listener)
             {
                 _rpc.Dispose();
                 await _connection.DisposeAsync().ConfigureAwait(false);
-            }
-            finally
-            {
-                _listener.Dispose();
             }
         }
         finally
         {
             try
             {
+                using var released = _process;
                 using var grace = new CancellationTokenSource(TimeSpan.FromSeconds(3));
                 ProcessMeasurements.Current?.Mark("host-exit-requested");
                 try
@@ -535,7 +532,6 @@ public sealed partial class HostProcessEngine : IReplEngine
             }
             finally
             {
-                _process.Dispose();
                 if (_ownsLifetime)
                 {
                     await _lifetime.DisposeAsync().ConfigureAwait(false);

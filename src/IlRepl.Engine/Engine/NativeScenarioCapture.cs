@@ -44,8 +44,7 @@ internal static class NativeScenarioCapture
             throw new ReplException("native comparison scenarios require compatible left and right method signatures");
         }
 
-        var helpers = new Dictionary<MethodBase, (ModuleDefinition Module, string Name)>();
-        var streams = new List<MemoryStream>();
+        var helpers = new Dictionary<MethodBase, (ModuleDefinition Module, string Name, MemoryStream Image)>();
         var pending = new Queue<MethodInfo>();
         pending.Enqueue(scenario);
         try
@@ -65,13 +64,12 @@ internal static class NativeScenarioCapture
 
                 // Cecil reads a module on demand, so its stream stays open for as long as the module is in use.
                 var stream = new MemoryStream(definition.Image, writable: false);
-                streams.Add(stream);
                 var module = ModuleDefinition.ReadModule(stream);
                 var name = "ilrepl.native.scenario." + Guid.NewGuid().ToString("N");
                 module.Assembly.Name.Name = name;
                 module.Name = name + ".dll";
                 module.Mvid = Guid.NewGuid();
-                helpers.Add(helper, (module, name));
+                helpers.Add(helper, (module, name, stream));
                 var body = (MethodDefinition)module.LookupToken(helper.MetadataToken);
                 foreach (var instruction in body.Body.Instructions)
                 {
@@ -216,11 +214,7 @@ internal static class NativeScenarioCapture
             foreach (var helper in helpers.Values)
             {
                 helper.Module.Dispose();
-            }
-
-            foreach (var stream in streams)
-            {
-                stream.Dispose();
+                helper.Image.Dispose();
             }
         }
     }

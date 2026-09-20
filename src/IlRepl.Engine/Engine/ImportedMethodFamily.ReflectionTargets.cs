@@ -261,7 +261,7 @@ internal sealed partial class ImportedMethodFamily
 
                     var member = candidate is PropertyInfo property ? property.GetMethod : candidate as MethodBase;
                     // A delegate's bound receiver was validated when its binding or method pointer was created.
-                    if (member?.DeclaringType == typeof(object) && !member.IsStatic
+                    if (member is not null && member.DeclaringType == typeof(object) && !member.IsStatic
                         && member.Name is nameof(ToString) or nameof(Equals) or nameof(GetHashCode)
                         && target.Name != nameof(Delegate.DynamicInvoke))
                     {

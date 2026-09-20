@@ -47,6 +47,7 @@ internal sealed partial class StructuralObservation
 
         var entries = new List<(string Order, object? Key, object? Value)>();
         var iterator = dictionary ? ((IDictionary)value).GetEnumerator() : ((IEnumerable)value).GetEnumerator();
+        using var iteratorLifetime = iterator as IDisposable;
         try
         {
             while (iterator.MoveNext())
@@ -70,10 +71,6 @@ internal sealed partial class StructuralObservation
         catch (InvalidOperationException)
         {
             return Incomplete("collection changed during observation");
-        }
-        finally
-        {
-            (iterator as IDisposable)?.Dispose();
         }
 
         if (entries.Count > 1)

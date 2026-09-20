@@ -401,8 +401,10 @@ public sealed class Submission
 
             lock (_comparisonLock)
             {
-                _running = false;
-                _cancellation.Dispose();
+                using (_cancellation)
+                {
+                    _running = false;
+                }
             }
         }
     }

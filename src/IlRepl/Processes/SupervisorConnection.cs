@@ -154,14 +154,10 @@ internal sealed class SupervisorConnection : IAsyncDisposable
     {
         try
         {
-            try
+            using (_listener)
             {
                 Rpc.Dispose();
                 await _stream.DisposeAsync().ConfigureAwait(false);
-            }
-            finally
-            {
-                _listener.Dispose();
             }
         }
         finally

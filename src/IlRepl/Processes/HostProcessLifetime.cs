@@ -443,8 +443,9 @@ public sealed class HostProcessLifetime : IProcessSupervision, IAsyncDisposable
         }
 
         List<Exception> failures = [];
-        try
+        using (_gate)
         {
+            using var lifetime = _lifetime;
             foreach (var connection in connections)
             {
                 try
@@ -456,11 +457,6 @@ public sealed class HostProcessLifetime : IProcessSupervision, IAsyncDisposable
                     failures.Add(exception);
                 }
             }
-        }
-        finally
-        {
-            _lifetime.Dispose();
-            _gate.Dispose();
         }
 
         if (failures.Count == 1)

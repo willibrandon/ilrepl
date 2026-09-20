@@ -980,8 +980,8 @@ public static class SymbolBinder
             return inherited;
         }
 
-        if (candidates.Count == 0 && arity == 0 && returnType is not null && parameterTypes is not null && own.CanDefineForward
-            && !instantiated && !scope.Inspecting)
+        if (candidates.Count == 0 && arity == 0 && returnType is not null && boundReturnType is not null && parameterTypes is not null
+            && own.CanDefineForward && !instantiated && !scope.Inspecting)
         {
             // A member referenced before its declaration: the signature is taken at its word and
             // checked when the type closes, which is what lets members call each other in any order.
@@ -996,7 +996,7 @@ public static class SymbolBinder
                     | MethodAttributes.Static,
                 CallingConvention = wantConstructor || explicitInstance ? CallingConventions.HasThis : CallingConventions.Standard,
                 ReturnType = returnType,
-                ExactReturnType = RuntimeSymbolTypes.RequiresExact(boundReturnType!.ExactType)
+                ExactReturnType = RuntimeSymbolTypes.RequiresExact(boundReturnType.ExactType)
                     ? boundReturnType.ExactType : null,
                 ReturnRequiredModifiers = boundReturnType.RequiredModifiers,
                 ReturnOptionalModifiers = boundReturnType.OptionalModifiers,

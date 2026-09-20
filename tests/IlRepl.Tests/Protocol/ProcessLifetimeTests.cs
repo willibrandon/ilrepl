@@ -258,6 +258,7 @@ public sealed partial class ProcessLifetimeTests
             }
 
             await OwnedProcessGroup.WaitForExitAsync(frontend, CancellationToken.None);
+            using var hostHandle = host;
             if (host is not null)
             {
                 if (!host.HasExited)
@@ -273,8 +274,6 @@ public sealed partial class ProcessLifetimeTests
                 {
                     await OwnedProcessGroup.WaitForExitAsync(host, CancellationToken.None);
                 }
-
-                host.Dispose();
             }
 
             records ??= File.Exists(descendants) ? await File.ReadAllLinesAsync(descendants, CancellationToken.None) : [];

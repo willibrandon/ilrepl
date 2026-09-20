@@ -47,6 +47,7 @@ internal sealed partial class StructuralObservation
         members.Add(new ObservedMember("comparer", Capture(comparer, depth + 1)));
         // These methods belong to the framework's concrete base, so subclass interface implementations cannot run.
         var iterator = (IEnumerator)collection.GetMethod("GetEnumerator", Type.EmptyTypes)!.Invoke(value, null)!;
+        using var iteratorLifetime = iterator as IDisposable;
         try
         {
             var index = 0;
@@ -78,10 +79,6 @@ internal sealed partial class StructuralObservation
         catch (InvalidOperationException)
         {
             members.Add(new ObservedMember("remaining", Unavailable(name, "collection changed during observation")));
-        }
-        finally
-        {
-            (iterator as IDisposable)?.Dispose();
         }
 
         return new ObservedValue(dictionary ? "dictionary" : "set", name, null, identity, members);

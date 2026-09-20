@@ -145,12 +145,12 @@ public sealed partial class OperandCompleter : IDisposable
         finally
         {
             _activeCancellation = null;
-            if (_activeEditing is { } active && !ReferenceEquals(active, _editing))
+            // The editing session of this request is released unless it has become the one that later requests start from.
+            using (ReferenceEquals(_activeEditing, _editing) ? null : _activeEditing)
             {
-                active.Dispose();
+                _activeEditing = null;
             }
 
-            _activeEditing = null;
             _gate.Release();
         }
     }

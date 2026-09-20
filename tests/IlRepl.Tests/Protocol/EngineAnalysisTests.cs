@@ -102,7 +102,7 @@ public sealed class EngineAnalysisTests
                 TestContext.CancellationToken);
         }
 
-        Assert.IsNotNull(reply);
+        reply = Required.Value(reply, "The last reply");
         Assert.IsFalse(reply.Succeeded);
         var error = reply.Diagnostics.Single();
         Assert.AreEqual("document", error.Location.Body);

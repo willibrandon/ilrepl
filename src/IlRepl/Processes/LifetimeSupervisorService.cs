@@ -204,6 +204,9 @@ internal sealed class LifetimeSupervisorService(long epoch) : ISupervisorService
     {
         await _lifetime.CancelAsync().ConfigureAwait(false);
         await _gate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+        // Declared in this order so that the gate is disposed first, after it has been released below.
+        using var lifetime = _lifetime;
+        using var gate = _gate;
         try
         {
             foreach (var identity in _scopes.Keys.Where(identity => !PreserveOnDispose || !_acknowledged.Contains(identity)).ToArray())
@@ -219,8 +222,6 @@ internal sealed class LifetimeSupervisorService(long epoch) : ISupervisorService
         finally
         {
             _gate.Release();
-            _gate.Dispose();
-            _lifetime.Dispose();
         }
     }
 }

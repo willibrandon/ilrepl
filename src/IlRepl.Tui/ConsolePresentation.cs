@@ -216,19 +216,15 @@ internal sealed class ConsolePresentation : IHex1bTerminalPresentationAdapter, I
         {
             if (rawMode is not null)
             {
-                try
-                {
-                    await rawMode.CancelAsync().ConfigureAwait(false);
-                }
-                finally
+                using (rawMode)
                 {
                     try
                     {
-                        await Task.WhenAll(reads).ConfigureAwait(false);
+                        await rawMode.CancelAsync().ConfigureAwait(false);
                     }
                     finally
                     {
-                        rawMode.Dispose();
+                        await Task.WhenAll(reads).ConfigureAwait(false);
                     }
                 }
             }

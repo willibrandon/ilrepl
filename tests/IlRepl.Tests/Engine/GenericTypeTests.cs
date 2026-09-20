@@ -226,7 +226,7 @@ public sealed class GenericTypeTests
         var token = Run(session, "ldtoken class Counted`1<int32>",
             "call class [System.Runtime]System.Type [System.Runtime]System.Type::GetTypeFromHandle(valuetype " +
             "[System.Runtime]System.RuntimeTypeHandle)") as Type;
-        Assert.IsNotNull(token);
+        token = Required.Value(token, "The type token");
         Assert.AreEqual(session.Types[0].RuntimeType, token.GetGenericTypeDefinition());
     }
 

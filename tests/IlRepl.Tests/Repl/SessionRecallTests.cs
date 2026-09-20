@@ -126,7 +126,7 @@ public sealed class SessionRecallTests
             }
         }
 
-        Assert.IsNotNull(result);
+        result = Required.Value(result, "The last reply");
         Assert.IsTrue(result.Succeeded, string.Join('\n', result.Lines.Select(item => item.PlainText)));
         Assert.AreEqual(partial ? "  = 42 : int32" : "  = 7 : int32",
             result.Lines.Last(line => line.Kind == LineKind.Result).PlainText);
@@ -169,7 +169,7 @@ public sealed class SessionRecallTests
             }
         }
 
-        Assert.IsNotNull(result);
+        result = Required.Value(result, "The last reply");
         Assert.IsTrue(result.Succeeded, string.Join('\n', result.Lines.Select(item => item.PlainText)));
         Assert.AreEqual("  = 27 : int32", result.Lines.Last(line => line.Kind == LineKind.Result).PlainText);
     }
@@ -293,7 +293,7 @@ public sealed class SessionRecallTests
                 Assert.IsTrue(ran.Succeeded, string.Join('\n', ran.Lines.Select(item => item.PlainText)));
             }
 
-            Assert.IsNotNull(ran);
+            ran = Required.Value(ran, "The last reply");
             Assert.Contains(line => line.Kind == LineKind.Result && line.PlainText == "  = 42 : int32", ran.Lines);
         }
     }
@@ -363,7 +363,7 @@ public sealed class SessionRecallTests
             Assert.IsTrue(result.Succeeded, string.Join('\n', result.Lines.Select(item => item.PlainText)));
         }
 
-        Assert.IsNotNull(result);
+        result = Required.Value(result, "The last reply");
         Assert.Contains(line => line.Kind == LineKind.Result && line.PlainText == "  = 42 : int32", result.Lines);
     }
 

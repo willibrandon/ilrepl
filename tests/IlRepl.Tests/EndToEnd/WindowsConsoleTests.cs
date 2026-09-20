@@ -183,9 +183,9 @@ public sealed class WindowsConsoleTests
                 await OwnedProcessGroup.WaitForExitAsync(observer, CancellationToken.None);
             }
 
-            frontend?.Dispose();
-            host?.Dispose();
-            observer?.Dispose();
+            using var frontendHandle = frontend;
+            using var hostHandle = host;
+            using var observerHandle = observer;
             if (File.Exists(descendants))
             {
                 foreach (var record in await File.ReadAllLinesAsync(descendants, CancellationToken.None))

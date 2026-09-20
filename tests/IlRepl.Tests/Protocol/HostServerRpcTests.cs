@@ -229,7 +229,8 @@ public sealed class HostServerRpcTests
                     TestContext.CancellationToken);
             }
 
-            Assert.IsFalse(handled!.Succeeded);
+            handled = Required.Value(handled, "The last reply");
+            Assert.IsFalse(handled.Succeeded);
             Assert.AreEqual(new AnalysisLocation("rpc", 2, 0, lines[2].Length), handled.Diagnostics.Single().Location);
             Assert.AreEqual("F", handled.Status.OpenMethod);
         }

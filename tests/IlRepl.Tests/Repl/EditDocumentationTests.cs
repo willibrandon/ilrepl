@@ -74,7 +74,7 @@ public sealed class EditDocumentationTests
             Assert.IsTrue(last.Succeeded, line + "\n" + Transcript(last));
         }
 
-        Assert.IsNotNull(last);
+        last = Required.Value(last, "The last reply");
         Assert.IsNotNull(last.PendingComparison);
         var executed = await engine.CompareAsync(last.PendingComparison.Identity, TestContext.CancellationToken);
         Assert.IsTrue(executed.Succeeded, Transcript(executed));

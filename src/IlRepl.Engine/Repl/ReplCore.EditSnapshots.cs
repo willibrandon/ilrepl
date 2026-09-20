@@ -28,7 +28,7 @@ public sealed partial class ReplCore
             }
 
             byte[]? image = null;
-            if (SessionAssemblies.TryGetDefinition(assembly, out var definition))
+            if (SessionAssemblies.TryGetDefinition(assembly, out var definition) && definition is not null)
             {
                 image = definition.Image;
             }

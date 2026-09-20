@@ -75,8 +75,8 @@ public sealed class HostCrashTests
         var observed = await exited.Task;
         Assert.AreEqual(engine.ProcessId, observed.ProcessId);
         Assert.IsFalse(observed.Expected);
-        Assert.IsNotNull(observed.ExitCode);
-        Assert.AreNotEqual(0, observed.ExitCode.Value);
+        var exitCode = Required.Value(observed.ExitCode, "The exit code");
+        Assert.AreNotEqual(0, exitCode);
         Assert.IsLessThanOrEqualTo(65536, Encoding.UTF8.GetByteCount(observed.StandardError));
         if (failure == "fail-fast")
         {
@@ -98,7 +98,7 @@ public sealed class HostCrashTests
         {
             // On Windows a garbage collection that suspends the thread as its stack runs out ends the runtime with an access
             // violation, sometimes before it has written anything. The named exit code is then all there is to report.
-            var code = ExitCodes.Describe(observed.ExitCode.Value);
+            var code = ExitCodes.Describe(exitCode);
             if (OperatingSystem.IsWindows() && code == "0xC0000005 (access violation)")
             {
                 Assert.IsTrue(observed.StandardError.Length == 0 || observed.StandardError.StartsWith("Stack overflow",

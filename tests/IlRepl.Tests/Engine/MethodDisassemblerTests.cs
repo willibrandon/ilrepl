@@ -235,13 +235,14 @@ public sealed class MethodDisassemblerTests
 
         var blocks = method.Entries.Where(e => e.Kind == DisassembledEntryKind.Block).Select(e => (e.Block!.Value, e.Offset)).ToList();
         var filter = method.Clauses.Single(c => c.Kind == IlClauseKind.Filter);
-        Assert.AreSequenceEqual([(BlockKind.Try, 0), (BlockKind.Filter, filter.FilterStart!.Value),
+        var filterStart = Required.Value(filter.FilterStart, "The filter's start");
+        Assert.AreSequenceEqual([(BlockKind.Try, 0), (BlockKind.Filter, filterStart),
             (BlockKind.FilterHandler, filter.HandlerStart), (BlockKind.Fault, filter.HandlerEnd), (BlockKind.End, method.CodeSize - 1)],
             blocks);
         Assert.IsEmpty(method.Notes, string.Join("; ", method.Notes));
-        Assert.AreEqual("[]", DisassemblyText.StackAt(method, filter.FilterStart.Value));
+        Assert.AreEqual("[]", DisassemblyText.StackAt(method, filterStart));
         Assert.AreEqual("[]", DisassemblyText.StackAt(method, filter.HandlerStart));
-        Assert.AreEqual("[int32]", DisassemblyText.StackAt(method, filter.FilterStart.Value + 1));
+        Assert.AreEqual("[int32]", DisassemblyText.StackAt(method, filterStart + 1));
     }
 
     /// <summary>

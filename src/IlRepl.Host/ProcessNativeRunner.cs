@@ -335,8 +335,14 @@ public static class ProcessNativeRunner
                 }
             }
 
-            source?.Dispose();
-            session?.Dispose();
+            // The event source reads the session, so it is released first. The connection that both used goes last.
+            using (session)
+            {
+                using (source)
+                {
+                }
+            }
+
             if (connector is not null)
             {
                 await connector.DisposeAsync().ConfigureAwait(false);
