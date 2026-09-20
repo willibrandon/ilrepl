@@ -129,8 +129,7 @@ public sealed class TypeLifetimeTests
                 WaitForSearches(searches, progress, ct);
                 for (var i = 0; i < 10 && weak.IsAlive; i++)
                 {
-                    GC.Collect();
-                    GC.WaitForPendingFinalizers();
+                    FullCollection.Run();
                 }
 
                 Assert.IsFalse(weak.IsAlive, $"round {round}: the dropped definition should collect while other threads resolve names");
@@ -333,8 +332,7 @@ public sealed class TypeLifetimeTests
         Assert.IsFalse(session.TypeTable.TryResolve("Counter", false, false, out _));
         for (var i = 0; i < 10 && weak.IsAlive; i++)
         {
-            GC.Collect();
-            GC.WaitForPendingFinalizers();
+            FullCollection.Run();
         }
 
         Assert.IsFalse(weak.IsAlive, "the family's assembly should be collectible after reset");
@@ -352,8 +350,7 @@ public sealed class TypeLifetimeTests
         var session = Load(Counter);
         var instance = Run(session, "newobj instance void Counter::.ctor()")!;
         session.Reset();
-        GC.Collect();
-        GC.WaitForPendingFinalizers();
+        FullCollection.Run();
         Assert.AreEqual(1, instance.GetType().GetField("Id")!.GetValue(instance));
         Assert.AreEqual("Counter", instance.GetType().Name);
     }

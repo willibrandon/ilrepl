@@ -91,10 +91,10 @@ public sealed class ManifestResourceEditTests
             "ldtoken method instance string[] Assembly::GetManifestResourceNames()",
             "call class MethodBase MethodBase::GetMethodFromHandle(valuetype RuntimeMethodHandle)",
             "callvirt instance string MemberInfo::get_Name()", "ret", "}");
-        foreach (var (reference, name, expected) in new[]
+        foreach (var (reference, name, expected) in new (string, string, object)[]
         {
-            ("int32 UserAssembly::Read()", "ReadCopy", (object)42),
-            ("Inspect", "InspectCopy", (object)"GetManifestResourceNames"),
+            ("int32 UserAssembly::Read()", "ReadCopy", 42),
+            ("Inspect", "InspectCopy", "GetManifestResourceNames"),
         })
         {
             var edit = session.PrepareEdit(reference, name);

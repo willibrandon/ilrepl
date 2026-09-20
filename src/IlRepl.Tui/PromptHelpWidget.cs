@@ -50,7 +50,7 @@ public sealed record PromptHelpWidget(PromptState State, IReadOnlyList<Completio
 
                 // Hex1b redraws a hyperlink when its text, target, or id changes. The later rows of a wrapped link keep their
                 // text when the selection moves, so the id carries the style and every row is redrawn in the new color.
-                Hex1bWidget line = actionCurrent && action?.Url is { } url
+                Hex1bWidget line = actionCurrent && action!.Url is { } url
                     ? v.ThemePanel(theme => theme.Clone()
                         .Set(HyperlinkTheme.ForegroundColor, SpanPalette.Color(style))
                         .Set(HyperlinkTheme.FocusedForegroundColor, SpanPalette.Color(style))

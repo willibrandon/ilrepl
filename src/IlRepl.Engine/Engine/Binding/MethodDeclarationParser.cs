@@ -190,7 +190,7 @@ public static class MethodDeclarationParser
         // is parsed once !!N can be resolved.
         var nameStart = FindNameStart(s, pos, firstParen);
         var nameText = s[nameStart..firstParen].Trim();
-        var typeParameterSpecs = (IReadOnlyList<GenericParameterSpec>)[];
+        IReadOnlyList<GenericParameterSpec> typeParameterSpecs = [];
         var genericStart = nameText.StartsWith('\'') ? CilSyntaxParser.EndOfQuoted(nameText, 0) + 1 : 0;
         var lt = nameText.IndexOf('<', genericStart);
         if (lt >= 0)

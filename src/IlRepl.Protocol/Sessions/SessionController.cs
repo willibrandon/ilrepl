@@ -405,8 +405,9 @@ public sealed partial class SessionController : IReplEngine
                 Diagnostics = reply?.Diagnostics ?? [],
             };
         }
-        catch (OperationCanceledException) when (_disposed)
+        catch (OperationCanceledException) when (Volatile.Read(ref _disposed))
         {
+            // Disposal runs on another thread and cancels the call that is in flight here.
             return new HandleReply(false, true, UnstreamedFrontendOutput(reply?.Lines ?? []), Status);
         }
         finally

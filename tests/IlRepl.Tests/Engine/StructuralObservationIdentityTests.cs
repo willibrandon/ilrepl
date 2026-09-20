@@ -108,9 +108,7 @@ public sealed class StructuralObservationIdentityTests
     public void Capture_IdentityScopeDoesNotKeepUserObjectsAlive()
     {
         var (scope, reference) = CaptureCollectible();
-        GC.Collect();
-        GC.WaitForPendingFinalizers();
-        GC.Collect();
+        FullCollection.Run();
         Assert.IsFalse(reference.IsAlive, "The identity scope must not keep a completed invocation's input alive.");
         GC.KeepAlive(scope);
     }

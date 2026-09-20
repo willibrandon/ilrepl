@@ -383,7 +383,7 @@ public sealed class HashtableComparisonTests
             right.Add(pair.Key, pair.Value);
         }
 
-        foreach (var (original, reordered) in new[] { ((object)first, (object)second), (left, right) })
+        foreach (var (original, reordered) in new (object, object)[] { (first, second), (left, right) })
         {
             var observed = Observe(original);
             Assert.AreEqual(observed, Observe(reordered));

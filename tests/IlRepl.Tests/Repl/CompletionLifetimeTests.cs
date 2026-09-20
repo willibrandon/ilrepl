@@ -97,9 +97,7 @@ public sealed class CompletionLifetimeTests
         var weak = await CompleteAndResetAsync(session, completer, TestContext.CancellationToken);
         for (var attempt = 0; attempt < 15 && weak.IsAlive; attempt++)
         {
-            GC.Collect();
-            GC.WaitForPendingFinalizers();
-            GC.Collect();
+            FullCollection.Run();
             await Task.Delay(10, TestContext.CancellationToken);
         }
 

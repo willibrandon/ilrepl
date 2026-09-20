@@ -154,7 +154,7 @@ public sealed class SessionCliTests
         await files.WriteAsync(null, TestContext.CancellationToken);
         var original = await File.ReadAllBytesAsync(files.SessionPath, TestContext.CancellationToken);
         (int Code, string StdOut, string StdErr) result;
-        await using (var held = new FileStream(files.SessionPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+        await using (new FileStream(files.SessionPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
         {
             result = await RunAsync([files.SessionPath, "--run"]);
         }

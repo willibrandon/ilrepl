@@ -70,7 +70,7 @@ public sealed partial class EditingSession
                 cancellationToken.ThrowIfCancellationRequested();
                 if (_state.BindingRefreshRequired)
                 {
-                    var stalePosition = (Body: (object?)null, Node: 0,
+                    var stalePosition = (Body: default(object), Node: 0,
                         HasBody: _state.Method is not null || _state.OpenTypes.Count == 0, BindingsStale: true);
                     positions.Add(stalePosition);
                     sourceHelp.Add(null);
@@ -103,8 +103,8 @@ public sealed partial class EditingSession
                     }
                 }
 
-                var bodyPosition = (Body: (object?)_state.Body.AnalysisIdentity, Node: _state.Body.FlowNodes.Count,
-                    HasBody: !declaration && (_state.Method is not null || _state.OpenTypes.Count == 0), BindingsStale: false);
+                (object? Body, int Node, bool HasBody, bool BindingsStale) bodyPosition = (_state.Body.AnalysisIdentity,
+                    _state.Body.FlowNodes.Count, !declaration && (_state.Method is not null || _state.OpenTypes.Count == 0), false);
                 positions.Add(bodyPosition);
                 sourceHelp.Add(help);
                 _analysisBodies.TryAdd(_state.Body.AnalysisIdentity, _state.Body);
@@ -197,7 +197,7 @@ public sealed partial class EditingSession
                     if (position.BindingsStale)
                     {
                         var unknown = position.HasBody ? new AnalyzedStack(AnalyzedStackKind.Unknown, [], true) : null;
-                        return (unknown, false, (InstructionHelp?)null);
+                        return (unknown, false, default(InstructionHelp));
                     }
 
                     var body = _analysisBodies[position.Body!];

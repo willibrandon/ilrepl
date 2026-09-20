@@ -146,9 +146,9 @@ public sealed class RuntimeBindingAdapter
             case RuntimeDefinitionMember definition:
             {
                 var declaringType = ToType(method.DeclaringType!);
-                var mapped = definition.Method switch
+                MethodBase mapped = definition.Method switch
                 {
-                    ConstructorInfo constructor => (MethodBase)TypeBuilder.GetConstructor(declaringType, constructor),
+                    ConstructorInfo constructor => TypeBuilder.GetConstructor(declaringType, constructor),
                     MethodInfo info => TypeBuilder.GetMethod(declaringType, info),
                     _ => throw new InvalidOperationException("a definition member is a method or a constructor"),
                 };

@@ -766,7 +766,7 @@ public sealed partial class Session
         // Phase A: everything that can fail. A same-signature replacement keeps its trampoline,
         // so every caller already bound to it sees the new body; a new signature is a new
         // identity, and nothing references it yet.
-        var sameSignature = replacing is not null && !_rebuilding && SameSignature(replacing.Signature, open.Signature);
+        var sameSignature = replacing is not null && SameSignature(replacing.Signature, open.Signature);
         var trampoline = sameSignature ? replacing!.Trampoline : MethodTrampoline.Create(open.Signature);
         Dictionary<string, MethodTrampoline>? trampolines = null;
         var map = new EmitMap(signature =>
@@ -846,7 +846,7 @@ public sealed partial class Session
         Generation++;
         CompletionRevision++;
 
-        if (replacing is not null && !_rebuilding)
+        if (replacing is not null)
         {
             SessionAssemblies.Release(replacing.Version.Definition);
             if (!sameSignature)

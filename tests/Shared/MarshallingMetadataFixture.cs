@@ -33,7 +33,7 @@ public static class MarshallingMetadataFixture
             MetadataTokens.FieldDefinitionHandle(1), MetadataTokens.MethodDefinitionHandle(1));
         var field = metadata.AddFieldDefinition(FieldAttributes.Public
             | (target == "field" ? FieldAttributes.HasFieldMarshal : 0), metadata.GetOrAddString("Value"),
-            metadata.GetOrAddBlob((byte[])[6, 0x1c]));
+            metadata.GetOrAddBlob(new byte[] { 6, 0x1c }));
         var result = metadata.AddParameter(target == "return" ? ParameterAttributes.HasFieldMarshal : 0, default, 0);
         var parameter = metadata.AddParameter(target == "parameter" ? ParameterAttributes.HasFieldMarshal : 0,
             metadata.GetOrAddString("value"), 1);
@@ -50,7 +50,7 @@ public static class MarshallingMetadataFixture
         il.LoadArgument(0);
         il.OpCode(ILOpCode.Ret);
         metadata.AddMethodDefinition(MethodAttributes.Public | MethodAttributes.Static, MethodImplAttributes.IL,
-            metadata.GetOrAddString("Read"), metadata.GetOrAddBlob((byte[])[0, 1, 8, 8]), bodies.AddMethodBody(il), result);
+            metadata.GetOrAddString("Read"), metadata.GetOrAddBlob(new byte[] { 0, 1, 8, 8 }), bodies.AddMethodBody(il), result);
         var pe = new ManagedPEBuilder(new PEHeaderBuilder(imageCharacteristics: Characteristics.ExecutableImage | Characteristics.Dll),
             new MetadataRootBuilder(metadata), bodies.Builder, flags: CorFlags.ILOnly);
         var image = new BlobBuilder();

@@ -58,8 +58,11 @@ public sealed partial class Session
                 members.Add((previous, declaration!, block.HeaderLine, [.. block.Lines], int.MaxValue));
             }
 
-            members.AddRange(closure.Types.Select(t => (Old: (SessionType?)t, t.Declaration, t.Declaration.HeaderLine, t.Declaration.Lines,
-                t.Order)));
+            foreach (var type in closure.Types)
+            {
+                members.Add((type, type.Declaration, type.Declaration.HeaderLine, type.Declaration.Lines, type.Order));
+            }
+
             var predeclared =
                 new Dictionary<string, Dictionary<string, (TypeBuilder Prototype, OwnMembers Members)>>(StringComparer.Ordinal);
             foreach (var member in members)

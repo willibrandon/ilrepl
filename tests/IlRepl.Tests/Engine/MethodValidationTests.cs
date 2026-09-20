@@ -172,9 +172,7 @@ public sealed class MethodValidationTests
         var superseded = versions.Take(Redefinitions).ToArray();
         for (var round = 0; round < 20 && superseded.Any(version => version.IsAlive); round++)
         {
-            GC.Collect();
-            GC.WaitForPendingFinalizers();
-            GC.Collect();
+            FullCollection.Run();
         }
 
         Assert.DoesNotContain(version => version.IsAlive, superseded, "Superseded versions must be collected after rebinding.");

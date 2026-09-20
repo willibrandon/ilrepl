@@ -131,9 +131,9 @@ public static class InstructionReference
             return help with { Notes = [.. help.Notes, note] };
         }
 
-        var pops = instruction.Op == OpCodes.Ret ? returnArity ?? Math.Min(1, state?.Values?.Length ?? 0)
+        var pops = instruction.Op == OpCodes.Ret ? returnArity ?? Math.Min(1, state.Values?.Length ?? 0)
             : StackTransfer<T>.PopCount(instruction);
-        var incoming = state?.Kind == AnalyzedStackKind.Known && state.Values is { } values && values.Length >= pops
+        var incoming = state.Values is { } values && values.Length >= pops
             ? values.TakeLast(pops).Select(value => value.Type).ToArray() : new T?[pops];
         if (instruction.Op.Name is "call" or "callvirt" or "calli" or "newobj")
         {

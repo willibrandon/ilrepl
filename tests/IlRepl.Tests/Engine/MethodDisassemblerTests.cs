@@ -1049,8 +1049,7 @@ public sealed class MethodDisassemblerTests
         var reference = ListAndReset(session);
         for (var i = 0; i < 5 && reference.IsAlive; i++)
         {
-            GC.Collect();
-            GC.WaitForPendingFinalizers();
+            FullCollection.Run();
         }
 
         Assert.IsFalse(reference.IsAlive, "the listed definition should be collectable after .reset");

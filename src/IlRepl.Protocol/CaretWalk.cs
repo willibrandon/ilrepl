@@ -1221,7 +1221,7 @@ internal sealed class CaretWalk
                 ReturnTypeText = returnTypeText,
                 ExplicitInstance = explicitInstance,
                 NextIsAngle = genericOpen >= 0,
-                GenericNameEnd = hasName ? _r.EndOf(n) : -1,
+                GenericNameEnd = _r.EndOf(n),
                 GenericOpenOffset = genericOpen >= 0 ? _r.StartOf(genericOpen) : -1,
                 NextIsParen = paren >= 0,
                 DeclarationComplete = complete,

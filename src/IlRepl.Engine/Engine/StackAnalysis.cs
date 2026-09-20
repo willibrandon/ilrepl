@@ -227,7 +227,6 @@ public static class StackAnalysis
             return view;
         }
 
-        var scope = Scope();
         var symbol = RuntimeSymbolImporter.Import(field);
         var signature = RuntimeSymbolImporter.Import(method.Method);
         return view with

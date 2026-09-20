@@ -193,9 +193,7 @@ public sealed partial class DefinitionAssemblyTests
         var after = int.MaxValue;
         for (var round = 0; round < 20 && after - before >= Runs; round++)
         {
-            GC.Collect();
-            GC.WaitForPendingFinalizers();
-            GC.Collect();
+            FullCollection.Run();
             after = CellAssemblies();
         }
 
@@ -214,8 +212,6 @@ public sealed partial class DefinitionAssemblyTests
         var weak = (new WeakReference<Assembly>(holder.Assembly), new WeakReference<Assembly>(point.Assembly));
         SessionAssemblies.Release(holder);
         SessionAssemblies.Release(point);
-        point = null!;
-        holder = null!;
         Collect(() => false);
         Assert.IsTrue(weak.Item2.TryGetTarget(out _), "the dependency must stay alive while the referring type is retained");
         Assert.AreEqual(16, holderType.GetMethod("Read")!.Invoke(null, null), "first use after release must still resolve the dependency");
@@ -226,9 +222,7 @@ public sealed partial class DefinitionAssemblyTests
     {
         for (var round = 0; round < 12 && !done(); round++)
         {
-            GC.Collect();
-            GC.WaitForPendingFinalizers();
-            GC.Collect();
+            FullCollection.Run();
         }
     }
 

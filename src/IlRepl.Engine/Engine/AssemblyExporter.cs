@@ -172,7 +172,7 @@ public static class AssemblyExporter
             }
 
             TypeEmitter.WriteAllCancellable(writer,
-                [.. session.Types.Select(f => (f.Declaration, f.Prototypes, (IReadOnlyDictionary<string, Type>?)f.Types))],
+                [.. session.Types.Select(f => (f.Declaration, f.Prototypes, RuntimeTypes(f)))],
                 trampolines, cancellationToken);
 
             // Signatures are imported once every session type is a definition of this module.
@@ -305,6 +305,9 @@ public static class AssemblyExporter
             il.Emit(Mono.Cecil.Cil.OpCodes.Ret);
         }
     }
+
+    // The emitter takes the runtime types as optional, because a family that is still being built has none yet.
+    private static IReadOnlyDictionary<string, Type>? RuntimeTypes(SessionType family) => family.Types;
 
     private static void Guarded(string what, Action emit)
     {

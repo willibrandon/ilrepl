@@ -146,7 +146,7 @@ public sealed class ProcessDisposalTests
             var endpoints = Directory.GetDirectories(directory, "ilr-*");
             Assert.HasCount(1, endpoints, "Only the real supervisor endpoint should remain after host disposal.");
             var endpoint = endpoints[0];
-            var scope = OwnedProcessGroup.Describe(supervisor, "failed-supervisor-disposal");
+            OwnedProcessScope scope;
             if (hostEndpoint)
             {
                 failedEngine = await lifetime.StartAsync(HostPaths.HostAssembly, RepoPaths.Root, cancellationToken: token);

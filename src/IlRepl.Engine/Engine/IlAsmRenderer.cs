@@ -166,7 +166,7 @@ public static class IlAsmRenderer
                         break;
                     case FieldInfo f:
                         Note(f.DeclaringType);
-                        NoteExact(e.Instruction?.ExactFieldDeclaringType);
+                        NoteExact(e.Instruction.ExactFieldDeclaringType);
                         foreach (var type in SymbolReferences.Field(RuntimeSymbolImporter.Import(DefinitionOf(f))))
                         {
                             NoteExact(type);

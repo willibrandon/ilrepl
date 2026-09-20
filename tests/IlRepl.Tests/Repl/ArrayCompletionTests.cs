@@ -179,8 +179,7 @@ public sealed class ArrayCompletionTests
         var weak = CompileAndRelease(session);
         for (var attempt = 0; attempt < 10 && weak.IsAlive; attempt++)
         {
-            GC.Collect();
-            GC.WaitForPendingFinalizers();
+            FullCollection.Run();
         }
 
         Assert.IsFalse(weak.IsAlive, "The released cell must not retain its metadata body assembly.");

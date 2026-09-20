@@ -207,7 +207,7 @@ public static class SymbolBinder
             "ldloc.1" or "stloc.1" => 1,
             "ldloc.2" or "stloc.2" => 2,
             "ldloc.3" or "stloc.3" => 3,
-            _ => (int?)null,
+            _ => default(int?),
         };
 
         if (implicitLocal is int localIndex)
@@ -227,7 +227,7 @@ public static class SymbolBinder
             "ldarg.1" => 1,
             "ldarg.2" => 2,
             "ldarg.3" => 3,
-            _ => (int?)null,
+            _ => default(int?),
         };
 
         if (implicitArgument is int argumentIndex)
@@ -544,7 +544,7 @@ public static class SymbolBinder
         // twice: once leniently to find the declaring type, then again with that type's arguments in scope.
         var declaring = BindType(syntax.DeclaringType!, scope, lenientGenerics: true).Type;
         var typeArguments = scope.GenericArgumentsOf(declaring);
-        if (syntax.GenericArity is int arity)
+        if (syntax.GenericArity is not null)
         {
             return BindGenericDefinition(syntax, declaring, typeArguments, scope);
         }

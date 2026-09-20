@@ -83,8 +83,8 @@ internal static class CecilForwardingMethod
 
         CecilCustomAttributes.CopyMethod(selected, method, selected.HasThis ? 1 : 0);
 
-        var ownerMap = target.DeclaringType.GenericParameters.Select((parameter, index) =>
-            (parameter, value: (TypeReference)owner.GenericParameters[index])).ToDictionary(pair => pair.parameter, pair => pair.value);
+        var ownerMap = target.DeclaringType.GenericParameters.Zip(owner.GenericParameters.Cast<TypeReference>())
+            .ToDictionary(pair => pair.First, pair => pair.Second);
         var arguments = owner.GenericParameters.Skip(target.DeclaringType.GenericParameters.Count).Cast<TypeReference>()
             .Concat(method.GenericParameters);
         Emit(method, Reference(target, Construct(target.DeclaringType, ownerMap), arguments));

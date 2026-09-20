@@ -895,9 +895,10 @@ public sealed class SessionCodecTests
 
     private static SessionDocument Example()
     {
+        int[] items = [1, 2];
         var fields = new Dictionary<string, JsonElement>
         {
-            ["future"] = JsonSerializer.SerializeToElement(new { value = "keep", items = (int[])[1, 2] }),
+            ["future"] = JsonSerializer.SerializeToElement(new { value = "keep", items }),
         };
 
         var hash = SessionCodec.Hash([1, 2, 3, 4]);

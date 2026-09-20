@@ -34,8 +34,8 @@ public static class SafeArrayMetadataFixture
             MetadataTokens.FieldDefinitionHandle(2), MetadataTokens.MethodDefinitionHandle(2));
         metadata.AddNestedType(hidden, owner);
         var field = metadata.AddFieldDefinition(FieldAttributes.Public | (target == "field" ? FieldAttributes.HasFieldMarshal : 0),
-            metadata.GetOrAddString("Items"), metadata.GetOrAddBlob((byte[])[6, 0x1d, 0x1c]));
-        metadata.AddFieldDefinition(FieldAttributes.Public, metadata.GetOrAddString("Value"), metadata.GetOrAddBlob((byte[])[6, 8]));
+            metadata.GetOrAddString("Items"), metadata.GetOrAddBlob(new byte[] { 6, 0x1d, 0x1c }));
+        metadata.AddFieldDefinition(FieldAttributes.Public, metadata.GetOrAddString("Value"), metadata.GetOrAddBlob(new byte[] { 6, 8 }));
         var result = metadata.AddParameter(target == "return" ? ParameterAttributes.HasFieldMarshal : 0, default, 0);
         var parameter = metadata.AddParameter(target == "parameter" ? ParameterAttributes.HasFieldMarshal : 0,
             metadata.GetOrAddString("items"), 1);
@@ -56,7 +56,7 @@ public static class SafeArrayMetadataFixture
         il.LoadArgument(0);
         il.OpCode(ILOpCode.Ret);
         metadata.AddMethodDefinition(MethodAttributes.Public | MethodAttributes.Static, MethodImplAttributes.IL,
-            metadata.GetOrAddString("Read"), metadata.GetOrAddBlob((byte[])[0, 1, 0x1d, 0x1c, 0x1d, 0x1c]),
+            metadata.GetOrAddString("Read"), metadata.GetOrAddBlob(new byte[] { 0, 1, 0x1d, 0x1c, 0x1d, 0x1c }),
             bodies.AddMethodBody(il), result);
         var pe = new ManagedPEBuilder(new PEHeaderBuilder(imageCharacteristics: Characteristics.ExecutableImage | Characteristics.Dll),
             new MetadataRootBuilder(metadata), bodies.Builder, flags: CorFlags.ILOnly);

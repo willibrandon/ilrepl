@@ -66,7 +66,7 @@ public sealed partial class DisassemblyFidelityTests
     public void Reader_MatchesCecil_ForHandWrittenShapes()
     {
         var session = new Session();
-        var (assembly, image, fixture) = CecilFixture.Build((module, type) =>
+        var (_, image, fixture) = CecilFixture.Build((module, type) =>
         {
             type.Fields.Add(new Mono.Cecil.FieldDefinition("F", Mono.Cecil.FieldAttributes.Public | Mono.Cecil.FieldAttributes.Static,
                 module.TypeSystem.Int32));

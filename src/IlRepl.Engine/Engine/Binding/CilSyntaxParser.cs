@@ -211,8 +211,6 @@ public static partial class CilSyntaxParser
                     var candidate = words + " " + s[wordStart..wordEnd];
                     if (CilPrimitives.TryCanonical(candidate, out _))
                     {
-                        words = candidate;
-                        lookahead = wordEnd;
                         pos = wordEnd;
                         name = candidate;
                         break;

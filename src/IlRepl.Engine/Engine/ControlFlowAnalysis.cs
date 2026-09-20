@@ -417,7 +417,7 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
             var transferredPops = 0;
             var transferredPushes = 0;
             var transferredValues = (FlowValue<T>[]?)null;
-            var invalidatedAddressSlots = Array.Empty<(bool IsArgument, int Index)>();
+            (bool IsArgument, int Index)[] invalidatedAddressSlots;
             var addressMutationCompletesOnlyOnSuccess = false;
             var initializesConstructorThis = false;
             var initializesConstructorPath = false;
@@ -691,7 +691,7 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
                     constructorState = ConstructorStateFor(edgeFilterPaths, constructorState);
                 }
 
-                var outgoing = (FlowState<T>?)(edge.ClearsStack && !state.Invalid
+                var outgoing = (edge.ClearsStack && !state.Invalid
                     ? state with
                     {
                         Values = [],
@@ -2145,9 +2145,9 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
                 return ShapeFailure(message, returnType is null ? "an empty stack" : "exactly one " + _types.Name(returnType), count);
             }
 
-            if (returnType is not null && !_types.CanAssign(top, returnType))
+            if (returnType is not null && top is not null && !_types.CanAssign(top, returnType))
             {
-                var box = top is not null && _types.Algebra.IsValueType(top)
+                var box = _types.Algebra.IsValueType(top)
                     && _types.Category(returnType) == StackCategory.ObjectReference ? " (box it first)" : "";
                 return OperandFailure($"ret needs {_types.Name(returnType)} on the stack but found {_types.Name(top)}{box}",
                     count - 1, "return value", _types.Name(returnType));
