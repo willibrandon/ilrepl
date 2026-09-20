@@ -37,7 +37,8 @@ internal static class PackagedSmoke
             }
 
             await OfflineSaveAsync(executable, directory, timeout.Token);
-            Console.WriteLine("packaged interruption, restart, retained source, supervision, and offline save passed");
+            await QuitReleasesTheScreenAsync(executable, directory, timeout.Token);
+            Console.WriteLine("packaged interruption, restart, retained source, supervision, offline save, and quit passed");
             return true;
         }
         finally
@@ -204,15 +205,46 @@ internal static class PackagedSmoke
         return int.Parse(result.StandardOutput.Trim());
     }
 
+    /// <summary>
+    /// Verifies that the frontend never exits with the terminal still told to hold its screen.
+    /// </summary>
+    /// <remarks>
+    /// Each frame opens with synchronized output mode 2026 and closes it. A terminal such as Ghostty that is left in that mode
+    /// keeps showing the old screen until its own timeout, about a second after the program has gone.
+    /// </remarks>
+    /// <param name="executable">A published frontend executable or the ordinary managed frontend assembly.</param>
+    /// <param name="directory">An isolated working directory.</param>
+    /// <param name="cancellationToken">Bounds the complete terminal interaction.</param>
+    /// <returns>Completion after the frontend exits successfully.</returns>
+    internal static async Task QuitReleasesTheScreenAsync(string executable, string directory, CancellationToken cancellationToken)
+    {
+        var recorder = new WorkloadRecorder();
+        await using var terminal = CreateTerminal(executable, directory, out var diagnosticsPath, recorder: recorder);
+        var run = terminal.RunAsync(cancellationToken);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(30));
+        await WaitForStartupAsync(auto, run, "il[1]>", diagnosticsPath, cancellationToken);
+        await auto.WaitUntilNoTextAsync("starting execution host");
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: cancellationToken);
+        Assert.AreEqual(0, await run.WaitAsync(cancellationToken));
+
+        const string Hold = "\u001b[?2026h";
+        const string Release = "\u001b[?2026l";
+        var output = recorder.Output;
+        Assert.Contains(Hold, output, "The frontend is expected to draw its frames in synchronized output mode.");
+        Assert.IsGreaterThan(output.LastIndexOf(Hold, StringComparison.Ordinal), output.LastIndexOf(Release, StringComparison.Ordinal),
+            "The frontend exited with the terminal still holding its screen.");
+    }
+
     private static Hex1bTerminal CreateTerminal(
         string executable,
         string directory,
         out string diagnosticsPath,
-        IReadOnlyDictionary<string, string>? environment = null)
+        IReadOnlyDictionary<string, string>? environment = null,
+        WorkloadRecorder? recorder = null)
     {
         var stderr = Path.Combine(directory, "frontend-" + Guid.NewGuid().ToString("N") + ".stderr");
         diagnosticsPath = stderr;
-        return Hex1bTerminal.CreateBuilder()
+        var builder = Hex1bTerminal.CreateBuilder()
             .WithPtyProcess(options =>
             {
                 var managed = Path.GetExtension(executable).Equals(".dll", StringComparison.OrdinalIgnoreCase);
@@ -236,10 +268,14 @@ internal static class PackagedSmoke
                         "/bin/sh", "-c", launch, "ilrepl-smoke", stderr, options.FileName, .. options.Arguments];
                     options.FileName = "/usr/bin/env";
                 }
-            })
-            .WithHeadless()
-            .WithDimensions(120, 35)
-            .Build();
+            });
+
+        if (recorder is not null)
+        {
+            builder = builder.AddWorkloadFilter(recorder);
+        }
+
+        return builder.WithHeadless().WithDimensions(120, 35).Build();
     }
 
     private static async Task WaitForStartupAsync(

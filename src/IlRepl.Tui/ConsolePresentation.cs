@@ -9,6 +9,7 @@ namespace IlRepl.Tui;
 /// </summary>
 internal sealed class ConsolePresentation : IHex1bTerminalPresentationAdapter, ITerminalReflowProvider
 {
+    private static readonly byte[] s_releaseScreen = "\u001b[?2026l"u8.ToArray();
     private readonly ConsolePresentationAdapter _inner =
         new ConsolePresentationAdapter(enableMouse: true).WithSixelSupport(SixelPresentationSupport.None);
     private readonly object _sync = new();
@@ -234,7 +235,28 @@ internal sealed class ConsolePresentation : IHex1bTerminalPresentationAdapter, I
         finally
         {
             _input.Reset();
+            if (rawMode is not null)
+            {
+                await ReleaseScreenAsync().ConfigureAwait(false);
+            }
+
             await _inner.ExitRawModeAsync(CancellationToken.None).ConfigureAwait(false);
+        }
+    }
+
+    // Every frame opens with "hold the screen" and closes with "release it". The frame that a quit cuts short never sends its
+    // release, and a terminal such as Ghostty then keeps showing the old screen until its own timeout, about a second after
+    // the program has gone. Sending the release on the way out costs nothing on a terminal that does not know the mode.
+    private async Task ReleaseScreenAsync()
+    {
+        try
+        {
+            await _inner.WriteOutputAsync(s_releaseScreen, CancellationToken.None).ConfigureAwait(false);
+            await _inner.FlushAsync(CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (exception is IOException or ObjectDisposedException or InvalidOperationException)
+        {
+            // The terminal is already gone, so there is no screen left to release.
         }
     }
 

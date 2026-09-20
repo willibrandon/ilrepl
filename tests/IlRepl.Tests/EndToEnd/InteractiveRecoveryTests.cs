@@ -29,4 +29,22 @@ public sealed class InteractiveRecoveryTests
             Directory.Delete(directory, recursive: true);
         }
     }
+
+    /// <summary>
+    /// Quitting never leaves the terminal holding its screen, which Ghostty would show as a frozen view for about a second.
+    /// </summary>
+    [TestMethod]
+    [Timeout(90_000, CooperativeCancellation = true)]
+    public async Task Quit_ReleasesTheScreen()
+    {
+        var directory = Directory.CreateTempSubdirectory("ilrepl-terminal-quit-").FullName;
+        try
+        {
+            await PackagedSmoke.QuitReleasesTheScreenAsync(RepoPaths.FrontEndAssembly, directory, TestContext.CancellationToken);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
 }
