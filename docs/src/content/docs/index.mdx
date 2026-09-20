@@ -23,15 +23,7 @@ import HeroPrompt from '../../generated/HeroPrompt.astro';
 <div class="feature-strip">
   <div class="feature-item">
     <span class="feature-key">stack</span>
-    <span class="feature-label">Typed, and shown after every instruction. Underflows and type mismatches are caught at the prompt.</span>
-  </div>
-  <div class="feature-item">
-    <span class="feature-key">ret</span>
-    <span class="feature-label">Ends the cell. It compiles to a real method, runs, and prints the result with its type.</span>
-  </div>
-  <div class="feature-item">
-    <span class="feature-key">opcodes</span>
-    <span class="feature-label">All of them. Exception blocks, calli, varargs, generics, pinned locals, and tokens too.</span>
+    <span class="feature-label">Typed, and shown after every instruction, for every opcode. Stack errors are caught at the prompt.</span>
   </div>
   <div class="feature-item">
     <span class="feature-key">.class</span>
@@ -40,6 +32,14 @@ import HeroPrompt from '../../generated/HeroPrompt.astro';
   <div class="feature-item">
     <span class="feature-key">.dis</span>
     <span class="feature-label">Reads any method back, the framework's or your own, with the stack after each instruction.</span>
+  </div>
+  <div class="feature-item">
+    <span class="feature-key">.edit</span>
+    <span class="feature-label">Opens an editable copy of any method. .diff shows what changed, in the IL or in the native code.</span>
+  </div>
+  <div class="feature-item">
+    <span class="feature-key">.jit</span>
+    <span class="feature-label">Shows the machine code the JIT made for a method, yours or the framework's. --against compares two.</span>
   </div>
   <div class="feature-item">
     <span class="feature-key">.save</span>
