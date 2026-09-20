@@ -98,27 +98,27 @@ public sealed class MethodValidationTests
     [TestMethod]
     public void AddLine_MethodClose_NeverRunsTheBody()
     {
-        var variable = "ILREPL_TEST_" + Guid.NewGuid().ToString("N");
+        var marker = Path.Combine(Path.GetTempPath(), "ilrepl-test-" + Guid.NewGuid().ToString("N"));
         try
         {
             var session = Load(
                 ".method void Mark() {",
-                $"ldstr \"{variable}\"",
+                "ldstr " + LiteralParser.Escape(marker),
                 "ldstr \"ran\"",
-                "call void Environment::SetEnvironmentVariable(string, string)",
+                "call void File::WriteAllText(string, string)",
                 "newobj instance void InvalidOperationException::.ctor()",
                 "throw",
                 "}");
             Assert.HasCount(1, session.Methods);
-            Assert.IsNull(Environment.GetEnvironmentVariable(variable), "the body must not run at the close");
+            Assert.IsFalse(File.Exists(marker), "the body must not run at the close");
 
             session.AddLine("call void Mark()");
             Assert.ThrowsExactly<CellException>(() => session.Run());
-            Assert.AreEqual("ran", Environment.GetEnvironmentVariable(variable), "the body runs when called");
+            Assert.AreEqual("ran", File.ReadAllText(marker), "the body runs when called");
         }
         finally
         {
-            Environment.SetEnvironmentVariable(variable, null);
+            File.Delete(marker);
         }
     }
 

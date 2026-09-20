@@ -14,8 +14,6 @@ namespace IlRepl.Tests.Tui;
 [TestClass]
 public sealed class FileHistoryStoreTests
 {
-    private static readonly object EnvironmentGate = new();
-
     /// <summary>
     /// The test context, for cancellation.
     /// </summary>
@@ -302,23 +300,25 @@ public sealed class FileHistoryStoreTests
     [TestMethod]
     public void DefaultPath_HonoursXdgConfigHome()
     {
-        lock (EnvironmentGate)
-        {
-            var previous = Environment.GetEnvironmentVariable("XDG_CONFIG_HOME");
-            try
-            {
-                Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", Path.Combine(Path.GetTempPath(), "xdg"));
-                Assert.AreEqual(Path.Combine(Path.GetTempPath(), "xdg", "ilrepl", "history"), FileHistoryStore.DefaultPath());
-                Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", "");
-                Assert.DoesNotContain("xdg", FileHistoryStore.DefaultPath());
-                Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", null);
-                Assert.DoesNotContain("xdg", FileHistoryStore.DefaultPath());
-            }
-            finally
-            {
-                Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", previous);
-            }
-        }
+        var xdg = Path.Combine(Path.GetTempPath(), "xdg");
+        Assert.AreEqual(Path.Combine(xdg, "ilrepl", "history"), FileHistoryStore.DefaultPath(xdg));
+        Assert.DoesNotContain("xdg", FileHistoryStore.DefaultPath(""));
+        Assert.DoesNotContain("xdg", FileHistoryStore.DefaultPath(null));
+    }
+
+    /// <summary>
+    /// The variable the parameterless form reads is XDG_CONFIG_HOME, seen here in a process that starts with it set.
+    /// </summary>
+    /// <returns>A task that completes when the assertions have run.</returns>
+    [TestMethod]
+    public async Task DefaultPath_ReadsXdgConfigHomeFromTheEnvironment()
+    {
+        var xdg = Path.Combine(Path.GetTempPath(), "xdg-" + Guid.NewGuid().ToString("N"));
+        using var child = StartProbe(new Dictionary<string, string> { [HistoryProbes.Probe] = "path", ["XDG_CONFIG_HOME"] = xdg });
+
+        var output = await child.StandardOutput.ReadToEndAsync(TestContext.CancellationToken);
+        await child.WaitForExitAsync(TestContext.CancellationToken);
+        Assert.AreEqual(Path.Combine(xdg, "ilrepl", "history"), output.Trim());
     }
 
     /// <summary>
@@ -328,20 +328,8 @@ public sealed class FileHistoryStoreTests
     [OSCondition(ConditionMode.Include, OperatingSystems.Windows)]
     public void DefaultPath_Windows_UsesLocalApplicationData()
     {
-        lock (EnvironmentGate)
-        {
-            var previous = Environment.GetEnvironmentVariable("XDG_CONFIG_HOME");
-            try
-            {
-                Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", null);
-                Assert.AreEqual(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ilrepl",
-                    "history"), FileHistoryStore.DefaultPath());
-            }
-            finally
-            {
-                Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", previous);
-            }
-        }
+        Assert.AreEqual(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ilrepl", "history"),
+            FileHistoryStore.DefaultPath(null));
     }
 
     /// <summary>
@@ -351,20 +339,8 @@ public sealed class FileHistoryStoreTests
     [OSCondition(ConditionMode.Exclude, OperatingSystems.Windows)]
     public void DefaultPath_Unix_UsesConfigDirectory()
     {
-        lock (EnvironmentGate)
-        {
-            var previous = Environment.GetEnvironmentVariable("XDG_CONFIG_HOME");
-            try
-            {
-                Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", null);
-                Assert.AreEqual(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config", "ilrepl",
-                    "history"), FileHistoryStore.DefaultPath());
-            }
-            finally
-            {
-                Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", previous);
-            }
-        }
+        Assert.AreEqual(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config", "ilrepl", "history"),
+            FileHistoryStore.DefaultPath(null));
     }
 
     private static Process StartProbe(Dictionary<string, string> environment)

@@ -60,7 +60,7 @@ internal static class Program
             return RunProbeAsync(() => SessionCredentialProvider.TryRunAsync(args));
         }
 
-        if (Environment.GetEnvironmentVariable(HistoryProbes.Probe) is "hold" or "append")
+        if (Environment.GetEnvironmentVariable(HistoryProbes.Probe) is "hold" or "append" or "path")
         {
             return RunProbeAsync(HistoryProbes.TryRunAsync);
         }

@@ -58,9 +58,15 @@ public sealed class FileHistoryStore : IHistoryStore
     /// <c>~/.config/ilrepl/history</c>.
     /// </remarks>
     /// <returns>The path.</returns>
-    public static string DefaultPath()
+    public static string DefaultPath() => DefaultPath(Environment.GetEnvironmentVariable("XDG_CONFIG_HOME"));
+
+    /// <summary>
+    /// Where the history file lives for a given value of <c>XDG_CONFIG_HOME</c>.
+    /// </summary>
+    /// <param name="xdg">The variable's value, or null or empty when it is not set.</param>
+    /// <returns>The path.</returns>
+    internal static string DefaultPath(string? xdg)
     {
-        var xdg = Environment.GetEnvironmentVariable("XDG_CONFIG_HOME");
         if (!string.IsNullOrEmpty(xdg))
         {
             return System.IO.Path.Combine(xdg, "ilrepl", "history");

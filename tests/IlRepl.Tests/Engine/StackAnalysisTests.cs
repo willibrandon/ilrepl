@@ -287,7 +287,9 @@ public sealed class StackAnalysisTests
     {
         var method = Body((_, _, il, _) => il.Emit(OpCodes.Nop));
         var column = StackAnalysis.Run(method, out var diagnostics);
-        Assert.Contains("[]", column);
+
+        // A line without a stack is null in the column, so the stack is matched rather than looked up as a plain string.
+        Assert.Contains(stack => stack == "[]", column);
         Assert.Contains(diagnostic => diagnostic.Code == "FLOW020" && diagnostic.Kind == AnalysisDiagnosticKind.Error, diagnostics);
     }
 

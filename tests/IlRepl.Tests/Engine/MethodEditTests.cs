@@ -555,26 +555,26 @@ public sealed class MethodEditTests
     }
 
     /// <summary>
-    /// Preparing and committing execute no user code; explicit invocation produces the expected environment effect.
+    /// Preparing and committing execute no user code; explicit invocation produces the expected effect, a file the body writes.
     /// </summary>
     [TestMethod]
     public void PrepareAndCommit_DoNotRunUserCode()
     {
-        var variable = "ILREPL_EDIT_TEST_" + Guid.NewGuid().ToString("N");
+        var marker = Path.Combine(Path.GetTempPath(), "ilrepl-edit-test-" + Guid.NewGuid().ToString("N"));
         try
         {
-            var session = IlLines.Load(".method int32 Mark() {", $"ldstr \"{variable}\"", "ldstr \"ran\"",
-                "call void [System.Runtime]System.Environment::SetEnvironmentVariable(string, string)", "ldc.i4.s 42", "ret", "}");
+            var session = IlLines.Load(".method int32 Mark() {", "ldstr " + LiteralParser.Escape(marker), "ldstr \"ran\"",
+                "call void [System.Runtime]System.IO.File::WriteAllText(string, string)", "ldc.i4.s 42", "ret", "}");
             var draft = session.PrepareEdit("Mark", "MarkEdit");
-            Assert.IsNull(Environment.GetEnvironmentVariable(variable));
+            Assert.IsFalse(File.Exists(marker));
             var committed = session.CommitEdit(draft.Name, draft.Source);
-            Assert.IsNull(Environment.GetEnvironmentVariable(variable));
+            Assert.IsFalse(File.Exists(marker));
             Assert.AreEqual(42, committed.Method!.Invoke(null, null));
-            Assert.AreEqual("ran", Environment.GetEnvironmentVariable(variable));
+            Assert.AreEqual("ran", File.ReadAllText(marker));
         }
         finally
         {
-            Environment.SetEnvironmentVariable(variable, null);
+            File.Delete(marker);
         }
     }
 

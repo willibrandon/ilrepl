@@ -65,7 +65,7 @@ public sealed class ArrayElementCompletionTests
         {
             var array = (Array)session.Run().Value!;
             Assert.AreEqual(typeof(void).MakePointerType(), array.GetType().GetElementType());
-            Assert.HasCount(0, array);
+            Assert.IsEmpty(array);
         }
         else
         {
