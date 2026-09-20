@@ -275,6 +275,8 @@ public sealed partial class OwnedProcessGroup : IDisposable
         }
         else if (_group != 0)
         {
+            // Every member is about to be killed, so none of them can remove what its runtime put in the temporary directory.
+            var members = Members(_group);
             var signalled = SignalGroup(-_group, 9);
             var error = signalled == 0 ? 0 : Marshal.GetLastPInvokeError();
             if (error != 0 && error != 3 && !(OperatingSystem.IsMacOS() && error == 1))
@@ -310,9 +312,62 @@ public sealed partial class OwnedProcessGroup : IDisposable
 
                 await Task.Delay(10, CancellationToken.None).ConfigureAwait(false);
             }
+
+            foreach (var member in members)
+            {
+                RuntimeEndpoints.Remove(member);
+            }
         }
 
         _stopped = true;
+    }
+
+    // The group is named after its first process, the worker. The others are whatever user code started from it.
+    private static int[] Members(int group)
+    {
+        var members = new HashSet<int> { group };
+        try
+        {
+            if (OperatingSystem.IsLinux())
+            {
+                foreach (var directory in Directory.EnumerateDirectories("/proc"))
+                {
+                    if (int.TryParse(Path.GetFileName(directory), NumberStyles.None, CultureInfo.InvariantCulture, out var process)
+                        && LinuxGroupOf(directory) == group)
+                    {
+                        members.Add(process);
+                    }
+                }
+            }
+            else if (OperatingSystem.IsMacOS())
+            {
+                var buffer = new int[4096];
+                var count = ListGroupMembers(group, buffer, buffer.Length * sizeof(int));
+                members.UnionWith(buffer.Take(Math.Clamp(count, 0, buffer.Length)).Where(process => process > 0));
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or EntryPointNotFoundException
+            or DllNotFoundException)
+        {
+            // The worker's own files are still removed when the rest of the group cannot be listed.
+        }
+
+        return [.. members];
+    }
+
+    private static int LinuxGroupOf(string directory)
+    {
+        try
+        {
+            var status = File.ReadAllText(Path.Join(directory, "stat"));
+            var fields = status[(status.LastIndexOf(')') + 1)..].Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            return fields.Length > 2 && int.TryParse(fields[2], NumberStyles.None, CultureInfo.InvariantCulture, out var owner) ? owner : 0;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // The process ended while it was being read.
+            return 0;
+        }
     }
 
     private static bool HasLiveLinuxMembers(int group)
@@ -367,6 +422,9 @@ public sealed partial class OwnedProcessGroup : IDisposable
 
     [LibraryImport("libc", EntryPoint = "setsid", SetLastError = true)]
     private static partial int CreateSession();
+
+    [LibraryImport("libproc", EntryPoint = "proc_listpgrppids")]
+    private static partial int ListGroupMembers(int group, [Out] int[] buffer, int bufferSize);
 
     [LibraryImport("libc", EntryPoint = "kill", SetLastError = true)]
     private static partial int SignalGroup(int group, int signal);

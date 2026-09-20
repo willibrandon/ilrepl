@@ -118,6 +118,8 @@ public sealed partial class HostProcessEngine : IReplClient, IHostedEngine, IPro
                 code = await _lifetime.ExitCodeAsync(_scope.Identity).ConfigureAwait(false);
             }
 
+            // A host that crashed or was stopped could not remove its runtime's pipes and socket.
+            RuntimeEndpoints.Remove(_process.Id);
             string tail;
             lock (_stderr)
             {
