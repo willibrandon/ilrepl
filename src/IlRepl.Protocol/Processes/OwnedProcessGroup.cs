@@ -117,7 +117,7 @@ public sealed partial class OwnedProcessGroup : IDisposable
                 return false;
             }
 
-            return !(OperatingSystem.IsWindows() ? process.WaitForExit(0) : process.HasExited) || GroupExists(scope.ProcessId);
+            return !(OperatingSystem.IsWindows() ? process.WaitForExit(0) : HasExited(process)) || GroupExists(scope.ProcessId);
         }
         catch (Exception exception) when (exception is ArgumentException or InvalidOperationException
             or FileNotFoundException or DirectoryNotFoundException
@@ -148,7 +148,7 @@ public sealed partial class OwnedProcessGroup : IDisposable
                 return !process.WaitForExit(0);
             }
 
-            if (process.HasExited)
+            if (HasExited(process))
             {
                 return false;
             }
@@ -170,6 +170,11 @@ public sealed partial class OwnedProcessGroup : IDisposable
             return false;
         }
     }
+
+    // Process.HasExited takes the runtime's lock over all child processes. On macOS the runtime's SIGCHLD handler keeps that lock
+    // while any child is stopped: waitid reports the stopped child as ended, waitpid does not reap it, and the handler asks again.
+    // Nothing is lost by not asking there. A process that ended has no start time on macOS, so reading its identity already failed.
+    private static bool HasExited(Process process) => !OperatingSystem.IsMacOS() && process.HasExited;
 
     /// <summary>
     /// Waits for an adopted process to stop even when an unrelated container init process has not reaped its zombie.

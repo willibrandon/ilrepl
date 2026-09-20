@@ -33,7 +33,6 @@ jobs:
             os: macos-26
             artifact: macos-arm64
             timeout: 45
-            hangdump: Heap
     runs-on: ${{ matrix.os }}
     timeout-minutes: ${{ matrix.timeout || 30 }}
 
@@ -52,18 +51,7 @@ jobs:
         run: >-
           dotnet test --project tests/IlRepl.Tests/IlRepl.Tests.csproj -c Release
           --settings .github/ci.runsettings --report-trx --results-directory TestResults
-          --hangdump --hangdump-timeout 10m --hangdump-type ${{ matrix.hangdump || 'None' }}
-
-      # A stalled run on macOS leaves a dump of the test process. Its threads and pending async calls say what it waits for.
-      - name: Print the stacks of a stalled run
-        if: failure() && matrix.hangdump
-        shell: bash
-        run: |
-          dump=$(ls TestResults/IlRepl.Tests_*_hang.dmp 2>/dev/null | head -1)
-          if [ -z "$dump" ]; then echo "No hang dump was written."; exit 0; fi
-          dotnet tool install --global dotnet-dump
-          "$HOME/.dotnet/tools/dotnet-dump" analyze "$dump" -c "clrthreads" -c "clrstack -all" -c "dumpasync" -c "exit"
-          rm -f TestResults/*_hang.dmp
+          --hangdump --hangdump-timeout 10m --hangdump-type None
 
       - name: Upload test results
         if: always()

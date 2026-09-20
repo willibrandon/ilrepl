@@ -235,8 +235,10 @@ public sealed partial class ProcessLifetimeTests
                 var supervisorId = await ParentProcessIdAsync(host.Id, token);
                 using var supervisor = Process.GetProcessById(supervisorId);
                 var identity = supervisor.Id + " " + OwnedProcessGroup.GetStartIdentity(supervisor);
+                // While a child of this process is stopped, the macOS runtime can hold its lock over all child processes, so until
+                // the frontend is killed nothing here may wait for that lock. Process.Kill on a process found by its id would.
                 Assert.AreEqual(0, Signal(frontend.Id, OperatingSystem.IsMacOS() ? 17 : 19));
-                supervisor.Kill();
+                Assert.AreEqual(0, Signal(supervisor.Id, 9));
                 await WaitUntilAsync(() => !IsExecuting(identity), token);
             }
 
