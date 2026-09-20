@@ -452,7 +452,7 @@ public sealed class HostProcessLifetime : IProcessSupervision, IAsyncDisposable
                 {
                     await connection.DisposeAsync().ConfigureAwait(false);
                 }
-                catch (Exception exception)
+                catch (Exception exception) when (exception is not (StackOverflowException or AccessViolationException))
                 {
                     failures.Add(exception);
                 }

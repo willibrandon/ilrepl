@@ -26,7 +26,7 @@ public static partial class ComparisonProbe
             {
                 result = AsyncObservation.AwaitAsync(task).GetAwaiter().GetResult();
             }
-            catch (Exception exception)
+            catch (Exception exception) when (exception is not (StackOverflowException or AccessViolationException))
             {
                 failure = exception;
             }
@@ -55,7 +55,7 @@ public static partial class ComparisonProbe
             {
                 task.GetAwaiter().GetResult();
             }
-            catch (Exception exception)
+            catch (Exception exception) when (exception is not (StackOverflowException or AccessViolationException))
             {
                 failure = exception;
             }
@@ -86,7 +86,7 @@ public static partial class ComparisonProbe
             {
                 result = task.GetAwaiter().GetResult();
             }
-            catch (Exception exception)
+            catch (Exception exception) when (exception is not (StackOverflowException or AccessViolationException))
             {
                 failure = exception;
             }

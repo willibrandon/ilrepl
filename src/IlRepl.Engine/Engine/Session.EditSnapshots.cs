@@ -21,11 +21,7 @@ public sealed partial class Session
     {
         var resolver = Resolver.CreateSnapshotResolver(images, nativeLibraries);
         var family = ImportedMethodFamily.RestoreSnapshot(snapshot, this, resolver);
-        if (family.Problems.Count == 0)
-        {
-            family.Compile();
-        }
-
+        family.CompileIfValid();
         var edit = new MethodEdit(snapshot.Name, snapshot.Reference, family) { Fingerprint = snapshot.Fingerprint };
         _edits.Add(edit);
         CompletionRevision++;

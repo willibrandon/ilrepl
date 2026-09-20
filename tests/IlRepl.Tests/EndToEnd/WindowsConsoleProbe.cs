@@ -167,7 +167,7 @@ internal static partial class WindowsConsoleProbe
             {
                 Publish(marker, "CTRL_CLOSE_EVENT");
             }
-            catch
+            catch (Exception exception) when (exception is not (StackOverflowException or AccessViolationException))
             {
                 return 0;
             }

@@ -169,7 +169,7 @@ public static class DefinitionCompiler
                 $"the JIT rejected method {name}: {ex.Message} " +
                 $"(check .show for a stack mismatch between branches; the block is still open)", ex);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (Binding.ReplRecovery.IsRecoverable(ex))
         {
             // Preparation may activate the module. Reopening bypasses this execution boundary.
             throw new ReplException($"the runtime rejected method {name}: {ex.Message} (the block is still open)", ex);

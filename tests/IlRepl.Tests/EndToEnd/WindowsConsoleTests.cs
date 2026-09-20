@@ -5,6 +5,7 @@ using IlRepl.Engine;
 using IlRepl.Processes;
 using IlRepl.Protocol;
 using IlRepl.Tests.Engine;
+using System.Text;
 
 namespace IlRepl.Tests.EndToEnd;
 
@@ -228,23 +229,23 @@ public sealed class WindowsConsoleTests
 
         async Task<string> DiagnosticsAsync()
         {
-            var output = recorder.Output;
+            var output = new StringBuilder(recorder.Output);
             foreach (var path in s_recordSuffixes.Select(suffix => frontendRecord + suffix))
             {
                 try
                 {
                     if (File.Exists(path))
                     {
-                        output += "\n" + Path.GetFileName(path) + ": " + await File.ReadAllTextAsync(path, CancellationToken.None);
+                        output.Append("\n" + Path.GetFileName(path) + ": " + await File.ReadAllTextAsync(path, CancellationToken.None));
                     }
                 }
                 catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
                 {
-                    output += "\n" + Path.GetFileName(path) + ": " + exception.Message;
+                    output.Append("\n" + Path.GetFileName(path) + ": " + exception.Message);
                 }
             }
 
-            return output;
+            return output.ToString();
         }
     }
 

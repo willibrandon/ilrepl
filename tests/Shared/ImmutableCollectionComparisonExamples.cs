@@ -1,3 +1,5 @@
+using System.Text;
+
 namespace IlRepl.Tests.Shared;
 
 /// <summary>
@@ -46,28 +48,29 @@ public static class ImmutableCollectionComparisonExamples
         bool edited = false)
     {
         var collection = set ? "class ImmutableHashSet<string>" : "class ImmutableDictionary<string, string>";
-        var source = ".method public static " + collection + " Read() {\nldsfld " + collection + " " + collection + "::Empty\n";
-        source += Comparer(keyComparer);
+        var source = new StringBuilder(".method public static " + collection + " Read() {\nldsfld " + collection + " " + collection
+            + "::Empty\n");
+        source.Append(Comparer(keyComparer));
         if (!set)
         {
-            source += Comparer(valueComparer);
+            source.Append(Comparer(valueComparer));
         }
 
-        source += "callvirt instance " + collection + " " + collection + (set
+        source.Append("callvirt instance " + collection + " " + collection + (set
             ? "::WithComparer(class IEqualityComparer<string>)\n"
-            : "::WithComparers(class IEqualityComparer<string>, class IEqualityComparer<string>)\n");
+            : "::WithComparers(class IEqualityComparer<string>, class IEqualityComparer<string>)\n"));
         foreach (var (key, value) in Contents(count, edited, set))
         {
-            source += "ldstr \"" + key + "\"\n";
+            source.Append("ldstr \"" + key + "\"\n");
             if (!set)
             {
-                source += "ldstr \"" + value + "\"\n";
+                source.Append("ldstr \"" + value + "\"\n");
             }
 
-            source += "callvirt instance " + collection + " " + collection + (set ? "::Add(string)\n" : "::Add(string, string)\n");
+            source.Append("callvirt instance " + collection + " " + collection + (set ? "::Add(string)\n" : "::Add(string, string)\n"));
         }
 
-        return source + "ret\n}";
+        return source.Append("ret\n}").ToString();
     }
 
     private static string Comparer(string name) => name == "default" ? "ldnull\n"

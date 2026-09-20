@@ -117,7 +117,7 @@ internal static class NativeWorkerProgram
 
             state = state with { Report = state.Report with { Outcome = "complete" } };
         }
-        catch (Exception exception)
+        catch (Exception exception) when (exception is not (StackOverflowException or AccessViolationException))
         {
             var cause = exception is TargetInvocationException { InnerException: { } inner } ? inner : exception;
             state = state with { Report = state.Report with { Outcome = "failed", Detail = cause.GetType().Name + ": " + cause.Message } };

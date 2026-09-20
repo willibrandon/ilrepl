@@ -54,7 +54,11 @@ internal static class ExportProbe
             }
             catch (Exception exception)
             {
-                completion.SetException(exception);
+                // A failure that can no longer be handed to the caller must not disappear instead.
+                if (!completion.TrySetException(exception))
+                {
+                    throw;
+                }
             }
         }, request.StackSize);
 

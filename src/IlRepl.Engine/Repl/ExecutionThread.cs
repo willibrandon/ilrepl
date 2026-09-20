@@ -53,7 +53,11 @@ internal sealed class ExecutionThread : IAsyncDisposable
             }
             catch (Exception exception)
             {
-                completion.TrySetException(exception);
+                // A failure that can no longer be handed to the caller must not disappear instead.
+                if (!completion.TrySetException(exception))
+                {
+                    throw;
+                }
             }
         }, cancellationToken);
 

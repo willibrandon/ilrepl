@@ -85,7 +85,7 @@ internal static class Program
             await probe();
             return 0;
         }
-        catch (Exception exception)
+        catch (Exception exception) when (exception is not (StackOverflowException or AccessViolationException))
         {
             Console.Error.WriteLine(exception);
             return 1;
@@ -98,7 +98,7 @@ internal static class Program
         {
             return await probe();
         }
-        catch (Exception exception)
+        catch (Exception exception) when (exception is not (StackOverflowException or AccessViolationException))
         {
             Console.Error.WriteLine(exception);
             return 1;

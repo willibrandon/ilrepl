@@ -1238,18 +1238,9 @@ public static class IlAsmRenderer
 
     private static string Modified(string type, IReadOnlyList<Type> required, IReadOnlyList<Type> optional)
     {
-        var text = type;
-        foreach (var modifier in optional)
-        {
-            text += " modopt(" + TypeNameFormatter.IlAsmDeclaring(modifier) + ")";
-        }
-
-        foreach (var modifier in required)
-        {
-            text += " modreq(" + TypeNameFormatter.IlAsmDeclaring(modifier) + ")";
-        }
-
-        return text;
+        return type
+            + string.Concat(optional.Select(modifier => " modopt(" + TypeNameFormatter.IlAsmDeclaring(modifier) + ")"))
+            + string.Concat(required.Select(modifier => " modreq(" + TypeNameFormatter.IlAsmDeclaring(modifier) + ")"));
     }
 
     private static void RenderMember(StringBuilder sb, MethodDeclaration method, int level)

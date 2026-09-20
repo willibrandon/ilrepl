@@ -78,7 +78,7 @@ public sealed partial class SessionController
                 _gate.Release();
             }
         }
-        catch (Exception exception)
+        catch (Exception exception) when (exception is not (StackOverflowException or AccessViolationException))
         {
             if (candidate is not null)
             {

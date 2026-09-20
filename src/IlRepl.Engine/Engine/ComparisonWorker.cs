@@ -179,7 +179,7 @@ public static partial class ComparisonWorker
                 result = returned is null && typeof(Task).IsAssignableFrom(method.ReturnType)
                     ? ComparisonProbe.NullTask() : await AsyncObservation.AwaitAsync(returned).ConfigureAwait(false);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not (StackOverflowException or AccessViolationException))
             {
                 failure = ex is TargetInvocationException { InnerException: { } inner } ? inner : ex;
             }
@@ -192,7 +192,7 @@ public static partial class ComparisonWorker
                 stdout?.Text ?? "", stderr?.Text ?? "",
                 invocations.Count == 0 ? "the scenario did not invoke the selected method" : null);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not (StackOverflowException or AccessViolationException))
         {
             var observation = new StructuralObservation(image.TypeNames);
             return new ComparisonSide(exceeded ? "output-limit" : "setup-failed", [], null, observation.Exception(ex), stdout?.Text ?? "",

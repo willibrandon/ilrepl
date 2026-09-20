@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 
 namespace IlRepl.Tests.Shared;
 
@@ -34,25 +35,25 @@ public static class FrozenCollectionComparisonExamples
     {
         var frozen = Type(set);
         var mutable = set ? "class HashSet<string>" : "class Dictionary<string, int32>";
-        var source = ".method public static " + frozen + " Read() {\nnewobj instance void " + mutable + "::.ctor()\n";
+        var source = new StringBuilder(".method public static " + frozen + " Read() {\nnewobj instance void " + mutable + "::.ctor()\n");
         var entries = Contents(set, count, edited);
         foreach (var (key, value) in reverse ? entries.Reverse() : entries)
         {
-            source += "dup\nldstr \"" + key + "\"\n";
+            source.Append("dup\nldstr \"" + key + "\"\n");
             if (!set)
             {
-                source += "ldc.i4 " + value.ToString(CultureInfo.InvariantCulture) + "\n";
+                source.Append("ldc.i4 " + value.ToString(CultureInfo.InvariantCulture) + "\n");
             }
 
-            source += "callvirt instance " + (set ? "bool " : "void ") + mutable
-                + (set ? "::Add(string)\npop\n" : "::Add(string, int32)\n");
+            source.Append("callvirt instance " + (set ? "bool " : "void ") + mutable
+                + (set ? "::Add(string)\npop\n" : "::Add(string, int32)\n"));
         }
 
-        source += comparer == "default" ? "ldnull\n" : "call class StringComparer StringComparer::get_" + comparer + "()\n";
-        source += "call " + frozen + " System.Collections.Frozen." + (set ? "FrozenSet::ToFrozenSet<string>"
+        source.Append(comparer == "default" ? "ldnull\n" : "call class StringComparer StringComparer::get_" + comparer + "()\n");
+        source.Append("call " + frozen + " System.Collections.Frozen." + (set ? "FrozenSet::ToFrozenSet<string>"
             : "FrozenDictionary::ToFrozenDictionary<string, int32>") + "(class IEnumerable<"
-            + (set ? "string" : "valuetype KeyValuePair<string, int32>") + ">, class IEqualityComparer<string>)\n";
-        return source + "ret\n}";
+            + (set ? "string" : "valuetype KeyValuePair<string, int32>") + ">, class IEqualityComparer<string>)\n");
+        return source.Append("ret\n}").ToString();
     }
 
     /// <summary>

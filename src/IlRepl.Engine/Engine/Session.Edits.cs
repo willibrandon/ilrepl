@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.Reflection.Emit;
-using IlRepl.Engine.Binding;
 
 namespace IlRepl.Engine;
 
@@ -72,18 +71,7 @@ public sealed partial class Session
         }
 
         var family = ImportedMethodFamily.Capture(chosen, method, this);
-        try
-        {
-            if (family.Problems.Count == 0)
-            {
-                family.Compile();
-            }
-        }
-        catch (Exception exception) when (ReplRecovery.IsRecoverable(exception))
-        {
-            family.Reject(exception.Message);
-        }
-
+        family.TryCompile();
         var edit = new MethodEdit(chosen, reference, family);
         _edits.Add(edit);
         CompletionRevision++;

@@ -205,7 +205,7 @@ internal static class ResponsivenessProbe
                     Console.WriteLine($"Measured {scenario}: {metrics["input-painted"].Count} interaction samples.");
                 }
             }
-            catch (Exception exception)
+            catch (Exception exception) when (exception is not (StackOverflowException or AccessViolationException))
             {
                 failure = exception;
                 failureStage = stage;

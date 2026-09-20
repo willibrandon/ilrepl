@@ -27,11 +27,8 @@ internal static partial class ComparisonInstrumentation
                 && reference.DeclaringType.GetElementType().FullName == owner.FullName)
             .Select(site => (site.method, site.instruction, reference: (MethodReference)site.instruction.Operand,
                 declaring: ((MethodReference)site.instruction.Operand).DeclaringType)).ToArray();
-        var name = "__ilrepl_observation_" + writer.Module.Types.Count;
-        while (writer.Module.Types.Any(type => type.Namespace == "IlRepl.Comparison" && type.Name == name))
-        {
-            name += "_";
-        }
+        var name = UniqueName.From("__ilrepl_observation_" + writer.Module.Types.Count, candidate =>
+            writer.Module.Types.Any(type => type.Namespace == "IlRepl.Comparison" && type.Name == candidate));
 
         var holder = new TypeDefinition("IlRepl.Comparison", name, TypeAttributes.Public | TypeAttributes.Abstract | TypeAttributes.Sealed,
             writer.Object);

@@ -192,13 +192,7 @@ internal sealed partial class ImportedMethodFamily
     {
         get
         {
-            var name = "<ilrepl>_" + Name;
-            while (_methods.Keys.Any(method => method.Name == name))
-            {
-                name += "_";
-            }
-
-            return name;
+            return UniqueName.From("<ilrepl>_" + Name, candidate => _methods.Keys.Any(method => method.Name == candidate));
         }
     }
 
@@ -688,6 +682,32 @@ internal sealed partial class ImportedMethodFamily
 
         return _types.ContainsKey(DefinitionOf(type))
             || type.IsConstructedGenericType && type.GetGenericArguments().Any(ContainsCopiedType);
+    }
+
+    /// <summary>
+    /// Compiles a family that was captured without problems, and leaves one with problems for its edit to report.
+    /// </summary>
+    internal void CompileIfValid()
+    {
+        if (Problems.Count == 0)
+        {
+            Compile();
+        }
+    }
+
+    /// <summary>
+    /// Compiles a family that was captured without problems, and records a failure it can recover from as its problem.
+    /// </summary>
+    internal void TryCompile()
+    {
+        try
+        {
+            CompileIfValid();
+        }
+        catch (Exception exception) when (ReplRecovery.IsRecoverable(exception))
+        {
+            Reject(exception.Message);
+        }
     }
 
     /// <summary>

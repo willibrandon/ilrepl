@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 
 namespace IlRepl.Tests.Shared;
 
@@ -40,17 +41,17 @@ public static class ConcurrentCollectionComparisonExamples
     public static string Method(int count, string comparer = "default", bool edited = false, bool reverse = false)
     {
         const string dictionary = "class ConcurrentDictionary<string, int32>";
-        var source = ".method public static " + dictionary + " Read() {\n";
-        source += comparer == "default" ? "newobj instance void " + dictionary + "::.ctor()\n"
+        var source = new StringBuilder(".method public static " + dictionary + " Read() {\n");
+        source.Append(comparer == "default" ? "newobj instance void " + dictionary + "::.ctor()\n"
             : "call class StringComparer StringComparer::get_" + comparer + "()\nnewobj instance void " + dictionary
-                + "::.ctor(class IEqualityComparer<string>)\n";
+                + "::.ctor(class IEqualityComparer<string>)\n");
         var entries = Contents(count, edited);
         foreach (var (key, value) in reverse ? entries.Reverse() : entries)
         {
-            source += "dup\nldstr \"" + key + "\"\nldc.i4 " + value.ToString(CultureInfo.InvariantCulture)
-                + "\ncallvirt instance bool " + dictionary + "::TryAdd(string, int32)\npop\n";
+            source.Append("dup\nldstr \"" + key + "\"\nldc.i4 " + value.ToString(CultureInfo.InvariantCulture)
+                + "\ncallvirt instance bool " + dictionary + "::TryAdd(string, int32)\npop\n");
         }
 
-        return source + "ret\n}";
+        return source.Append("ret\n}").ToString();
     }
 }

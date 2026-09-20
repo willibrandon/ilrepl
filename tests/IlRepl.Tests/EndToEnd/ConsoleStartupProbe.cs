@@ -68,7 +68,7 @@ internal static partial class ConsoleStartupProbe
                             Thread.Yield();
                         }
                     }
-                    catch (Exception exception)
+                    catch (Exception exception) when (exception is not (StackOverflowException or AccessViolationException))
                     {
                         monitorError = exception;
                         cancellation.Cancel();

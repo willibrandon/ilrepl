@@ -31,10 +31,7 @@ internal static partial class ComparisonInstrumentation
         GenericParameter[]? callerParameters = null)
     {
         var owner = target.DeclaringType;
-        while (owner.Methods.Any(method => method.Name == name))
-        {
-            name += "_";
-        }
+        name = UniqueName.From(name, candidate => owner.Methods.Any(method => method.Name == candidate));
 
         var wrapper = new MethodDefinition(name,
             MethodAttributes.Public | MethodAttributes.HideBySig | (target.IsStatic ? MethodAttributes.Static : 0), target.ReturnType)
