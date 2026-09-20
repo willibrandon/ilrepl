@@ -66,8 +66,12 @@ public sealed class HostCrashTests
             Assert.IsTrue(reply.Succeeded, string.Join('\n', reply.Lines.Select(item => item.PlainText)));
         }
 
+        var watch = Stopwatch.StartNew();
         await Assert.ThrowsAsync<HostProtocolException>(() => engine.HandleAsync("ret", token));
         Assert.IsTrue(exited.Task.IsCompletedSuccessfully, "Exit publication must precede the failed execution reply.");
+        // Windows Error Reporting keeps a host that overflowed the execution thread for over half a minute, and a minute or two
+        // on a loaded machine. The frontend ends a host that wrote its report and stopped answering, so the wait stays short.
+        Assert.IsLessThan(TimeSpan.FromSeconds(30), watch.Elapsed, "The failure must be reported without waiting for the system.");
         var observed = await exited.Task;
         Assert.AreEqual(engine.ProcessId, observed.ProcessId);
         Assert.IsFalse(observed.Expected);
@@ -110,6 +114,39 @@ public sealed class HostCrashTests
         {
             Assert.Contains("AccessViolation", observed.StandardError);
         }
+    }
+
+    /// <summary>
+    /// A host that writes diagnostics and goes on working is left alone, because it still answers.
+    /// </summary>
+    [TestMethod]
+    [Timeout(45_000, CooperativeCancellation = true)]
+    public async Task DiagnosticsFromAWorkingHost_DoNotEndIt()
+    {
+        var token = TestContext.CancellationToken;
+        await using var engine = await HostPaths.StartEngineAsync(token);
+        var exited = new TaskCompletionSource<HostExit>(TaskCreationOptions.RunContinuationsAsynchronously);
+        engine.Exited += value => exited.TrySetResult(value);
+        // The cell stays busy for longer than the frontend takes to ask the host whether it still answers.
+        foreach (var line in new[]
+        {
+            ".locals init (uint8[] bytes)", "call class System.Text.Encoding System.Text.Encoding::get_UTF8()",
+            "ldstr \"ilrepl-working-host-marker\"", "callvirt instance uint8[] System.Text.Encoding::GetBytes(string)", "stloc.0",
+            "call class System.IO.Stream Console::OpenStandardError()", "ldloc.0", "ldc.i4.0", "ldloc.0", "ldlen", "conv.i4",
+            "callvirt instance void System.IO.Stream::Write(uint8[], int32, int32)", "ldc.i4 1500",
+            "call void System.Threading.Thread::Sleep(int32)", "ldc.i4.s 42",
+        })
+        {
+            var reply = await engine.HandleAsync(line, token);
+            Assert.IsTrue(reply.Succeeded, string.Join('\n', reply.Lines.Select(item => item.PlainText)));
+        }
+
+        var result = await engine.HandleAsync("ret", token);
+
+        Assert.IsTrue(result.Succeeded, string.Join('\n', result.Lines.Select(item => item.PlainText)));
+        Assert.AreEqual("  = 42 : int32", Assert.ContainsSingle(result.Lines.Where(line => line.Kind == LineKind.Result)).PlainText);
+        Assert.IsFalse(exited.Task.IsCompleted, "A host that answers must not be ended.");
+        Assert.IsTrue((await engine.HandleAsync("nop", token)).Succeeded);
     }
 
     /// <summary>

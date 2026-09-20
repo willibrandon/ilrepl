@@ -27,10 +27,21 @@ internal sealed class DiagnosticTail
     }
 
     /// <summary>
+    /// Raised after text arrived, outside the buffer's lock.
+    /// </summary>
+    internal event Action? Appended;
+
+    /// <summary>
     /// Appends decoded diagnostic text without splitting a retained surrogate pair.
     /// </summary>
     /// <param name="text">The next bounded read.</param>
     internal void Append(ReadOnlySpan<char> text)
+    {
+        Retain(text);
+        Appended?.Invoke();
+    }
+
+    private void Retain(ReadOnlySpan<char> text)
     {
         lock (_text)
         {

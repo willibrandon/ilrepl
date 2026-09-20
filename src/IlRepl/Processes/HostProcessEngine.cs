@@ -99,6 +99,7 @@ public sealed partial class HostProcessEngine : IReplEngine
         Vocabulary = hello.Vocabulary;
         Status = hello.Status;
         _assemblyVersion = hello.AssemblyVersion;
+        WatchDiagnostics();
     }
 
     /// <inheritdoc />
@@ -495,6 +496,7 @@ public sealed partial class HostProcessEngine : IReplEngine
     {
         _disposed = true;
         Interlocked.Exchange(ref _expectedExit, 1);
+        await StopWatchingDiagnosticsAsync().ConfigureAwait(false);
         try
         {
             try
