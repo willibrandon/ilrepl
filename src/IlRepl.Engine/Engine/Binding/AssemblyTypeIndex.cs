@@ -35,6 +35,7 @@ public sealed class AssemblyTypeIndex
     {
         foreach (var _ in BuildSteps(reader))
         {
+            // Each step fills the index as it is reached. Here nothing pauses between them.
         }
     }
 

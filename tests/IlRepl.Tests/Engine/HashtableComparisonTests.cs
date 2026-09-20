@@ -397,7 +397,7 @@ public sealed class HashtableComparisonTests
         var type = typeof(CaseInsensitiveComparer).Assembly.GetType("System.Collections.CaseInsensitiveHashCodeProvider")!;
         var information = CultureInfo.GetCultureInfo(culture);
         var provider = Activator.CreateInstance(type, information);
-        var contract = type.GetInterfaces().Single(item => item.FullName == "System.Collections.IHashCodeProvider");
+        var contract = Required.Value(type.GetInterface("System.Collections.IHashCodeProvider"), "The hash code provider interface");
         IComparer comparer = ignoreCase ? new CaseInsensitiveComparer(information) : new Comparer(information);
         return (Hashtable)typeof(Hashtable).GetConstructor([contract, typeof(IComparer)])!
             .Invoke([provider, comparer]);

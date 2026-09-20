@@ -104,17 +104,10 @@ public sealed class SessionDocumentTests
         Submit(core, "ldc.i4 42");
         var before = core.CaptureSession(new SessionEditor());
 
-        var exception = Assert.ThrowsExactly<ReplException>(() =>
-        {
-            if (run)
-            {
-                _ = core.RunSession(new SessionDocument(), [], CancellationToken.None);
-            }
-            else
-            {
-                _ = core.ReopenSession(new SessionDocument());
-            }
-        });
+        Action replace = run
+            ? () => core.RunSession(new SessionDocument(), [], CancellationToken.None)
+            : () => core.ReopenSession(new SessionDocument());
+        var exception = Assert.ThrowsExactly<ReplException>(replace);
 
         Assert.Contains("requires a fresh execution host", exception.Message);
         Assert.AreSequenceEqual(SessionCodec.Write(before), SessionCodec.Write(core.CaptureSession(new SessionEditor())));

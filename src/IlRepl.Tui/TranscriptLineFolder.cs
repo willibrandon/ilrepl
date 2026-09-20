@@ -128,11 +128,12 @@ public static class TranscriptLineFolder
         }
 
         var i = start;
+        var text = new StringBuilder();
         while (i < end)
         {
             var style = cells[i].Style;
             var j = i;
-            var text = new StringBuilder();
+            text.Clear();
             while (j < end && cells[j].Style == style)
             {
                 text.Append(cells[j].Text);

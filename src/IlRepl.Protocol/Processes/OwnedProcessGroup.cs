@@ -330,14 +330,9 @@ public sealed partial class OwnedProcessGroup : IDisposable
         {
             if (OperatingSystem.IsLinux())
             {
-                foreach (var directory in Directory.EnumerateDirectories("/proc"))
-                {
-                    if (int.TryParse(Path.GetFileName(directory), NumberStyles.None, CultureInfo.InvariantCulture, out var process)
-                        && LinuxGroupOf(directory) == group)
-                    {
-                        members.Add(process);
-                    }
-                }
+                members.UnionWith(Directory.EnumerateDirectories("/proc").Select(Path.GetFileName)
+                    .Select(name => int.TryParse(name, NumberStyles.None, CultureInfo.InvariantCulture, out var process) ? process : 0)
+                    .Where(process => process > 0 && LinuxGroupOf("/proc/" + process.ToString(CultureInfo.InvariantCulture)) == group));
             }
             else if (OperatingSystem.IsMacOS())
             {

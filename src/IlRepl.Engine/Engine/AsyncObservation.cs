@@ -7,6 +7,9 @@ namespace IlRepl.Engine;
 /// </summary>
 internal static class AsyncObservation
 {
+    // A task without a result reports this private type as its result type. It has no public name to refer to.
+    private static readonly Type? s_voidResult = typeof(Task).Assembly.GetType("System.Threading.Tasks.VoidTaskResult");
+
     /// <summary>
     /// Waits for a returned task or value task and reads its result, passing any other value through.
     /// </summary>
@@ -37,7 +40,7 @@ internal static class AsyncObservation
             if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Task<>))
             {
                 var resultType = type.GetGenericArguments()[0];
-                if (resultType.Assembly == typeof(Task).Assembly && resultType.FullName == "System.Threading.Tasks.VoidTaskResult")
+                if (resultType == s_voidResult)
                 {
                     return null;
                 }

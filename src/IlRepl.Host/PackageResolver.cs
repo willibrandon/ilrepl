@@ -98,16 +98,13 @@ internal static partial class PackageResolver
 
             var project = Path.Join(output, "ilrepl.csproj");
             var lockPath = Path.Join(output, "packages.lock.json");
-            if (request is null)
+            if (request is null && !platformChange)
             {
-                if (!platformChange)
+                PackagesLockFileFormat.Write(lockPath, new PackagesLockFile(recordedLock!.Version)
                 {
-                    PackagesLockFileFormat.Write(lockPath, new PackagesLockFile(recordedLock!.Version)
-                    {
-                        Targets = [.. recordedLock.Targets.Where(target => target.TargetFramework == framework
-                            && (string.IsNullOrEmpty(target.RuntimeIdentifier) || target.RuntimeIdentifier == runtime))],
-                    });
-                }
+                    Targets = [.. recordedLock.Targets.Where(target => target.TargetFramework == framework
+                        && (string.IsNullOrEmpty(target.RuntimeIdentifier) || target.RuntimeIdentifier == runtime))],
+                });
             }
 
             using var graphStream = typeof(PackageResolver).Assembly

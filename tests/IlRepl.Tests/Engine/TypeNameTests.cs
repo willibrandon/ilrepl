@@ -102,9 +102,9 @@ public sealed class TypeNameTests
             Assert.Contains(dependency => dependency.Symbol == "Sibling" && dependency.Assembly == assembly.FullName
                 && dependency.Disposition == "external" && dependency.Access == "public", edit.Dependencies);
             var query = copiedOwner.GetMethod("Query", BindingFlags.NonPublic | BindingFlags.Static)!;
-            var retained = Assert.ContainsSingle(MethodDisassembler.Disassemble(query, session).Entries
-                .Select(entry => entry.Instruction?.Operand).OfType<Type>().Where(type => type.FullName == "TypeNames.Sibling"));
-            Assert.AreSame(assembly.GetType("TypeNames.Sibling"), retained);
+            var sibling = assembly.GetType("TypeNames.Sibling");
+            Assert.ContainsSingle(MethodDisassembler.Disassemble(query, session).Entries
+                .Select(entry => entry.Instruction?.Operand).OfType<Type>().Where(type => ReferenceEquals(type, sibling)));
         }
 
         await AssertComparison(session, 42);

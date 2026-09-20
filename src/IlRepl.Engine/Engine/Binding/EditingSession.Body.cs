@@ -111,12 +111,9 @@ public sealed partial class EditingSession
         {
             var scope = Scope();
             var instruction = SymbolBinder.BindInstruction(CilSyntaxParser.ParseInstruction(rest), scope);
-            if (instruction.Op == OpCodes.Ret)
+            if (instruction.Op == OpCodes.Ret && body.Frames.Count > 0)
             {
-                if (body.Frames.Count > 0)
-                {
-                    throw new ReplException("ret is not allowed inside a protected region; use leave to a label after it");
-                }
+                throw new ReplException("ret is not allowed inside a protected region; use leave to a label after it");
             }
 
             CheckInstruction(instruction, body, scope);

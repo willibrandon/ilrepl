@@ -25,7 +25,7 @@ public static class TypeIdentity
         ArgumentNullException.ThrowIfNull(a);
         ArgumentNullException.ThrowIfNull(b);
         if (ReferenceEquals(a, b)
-            || (a is TypeBuilder == false && b is TypeBuilder == false && a == b))
+            || (a is not TypeBuilder && b is not TypeBuilder && a == b))
         {
             return true;
         }

@@ -80,12 +80,12 @@ public sealed partial class WasmPresentationAdapter : IHex1bTerminalPresentation
             }
 
             var signal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            Interlocked.Exchange(ref s_inputSignal, signal);
+            Await(signal);
 
             var lateInput = PollAllInput();
             if (lateInput is { Length: > 0 })
             {
-                Interlocked.CompareExchange(ref s_inputSignal, null, signal);
+                Forget(signal);
                 return new ReadOnlyMemory<byte>(lateInput);
             }
 
@@ -94,7 +94,7 @@ public sealed partial class WasmPresentationAdapter : IHex1bTerminalPresentation
                 using var registration = ct.Register(static state => ((TaskCompletionSource)state!).TrySetCanceled(), signal);
                 // The signal normally wins; the delay is a fallback in case the JavaScript export was not wired.
                 await Task.WhenAny(signal.Task, Task.Delay(50, ct)).ConfigureAwait(false);
-                Interlocked.CompareExchange(ref s_inputSignal, null, signal);
+                Forget(signal);
             }
             catch (OperationCanceledException)
             {
@@ -144,6 +144,11 @@ public sealed partial class WasmPresentationAdapter : IHex1bTerminalPresentation
     /// </summary>
     [JSImport("notifyExited", "main.js")]
     internal static partial void NotifyExited();
+
+    // The page has one input stream, so the signal it raises is shared by every adapter.
+    private static void Await(TaskCompletionSource signal) => Interlocked.Exchange(ref s_inputSignal, signal);
+
+    private static void Forget(TaskCompletionSource signal) => Interlocked.CompareExchange(ref s_inputSignal, null, signal);
 
     /// <summary>
     /// Wakes <see cref="ReadInputAsync"/>. JavaScript calls this when input or a resize arrives.

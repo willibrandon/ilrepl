@@ -222,12 +222,10 @@ internal sealed partial class ReflectionValueResolver
             return HasCopiedMetadata(body, position, method.GetParameters().Length + 1, isCopiedMember);
         }
 
-        if (owner == typeof(RuntimeTypeHandle) || owner == typeof(RuntimeMethodHandle) || owner == typeof(RuntimeFieldHandle))
+        var handle = owner == typeof(RuntimeTypeHandle) || owner == typeof(RuntimeMethodHandle) || owner == typeof(RuntimeFieldHandle);
+        if (handle && name is "get_Value" or "FromIntPtr" or "ToIntPtr")
         {
-            if (name is "get_Value" or "FromIntPtr" or "ToIntPtr")
-            {
-                return HasCopiedMetadata(body, position, 1, isCopiedMember);
-            }
+            return HasCopiedMetadata(body, position, 1, isCopiedMember);
         }
 
         if (owner == typeof(Array) && name == nameof(Array.GetValue))

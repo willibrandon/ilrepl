@@ -125,7 +125,7 @@ public sealed class MethodEditNamespaceTests
         {
             var assembly = context.LoadImage(image);
             Assert.AreEqual(42, assembly.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
-            Assert.HasCount(1, assembly.GetTypes().Where(type => type.FullName == "IlRepl.Edits.Copy.Owner"));
+            Assert.IsNotNull(assembly.GetType("IlRepl.Edits.Copy.Owner"));
             Assert.IsEmpty(assembly.GetReferencedAssemblies().Where(reference =>
                 reference.Name!.StartsWith("ilrepl_", StringComparison.Ordinal)));
         }

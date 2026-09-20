@@ -334,15 +334,10 @@ public sealed partial class SessionController : IReplEngine
                     .ConfigureAwait(false);
             }
 
-            if (location is not null && !boundary && _engine is IHostedEngine hosted && CanDeferCheckpoint(line))
-            {
-                reply = await hosted.HandleRetainedSourceAsync(line, location, cancellationToken).ConfigureAwait(false);
-            }
-            else
-            {
-                reply = location is null ? await _engine.HandleAsync(line, cancellationToken).ConfigureAwait(false)
+            reply = location is null ? await _engine.HandleAsync(line, cancellationToken).ConfigureAwait(false)
+                : !boundary && _engine is IHostedEngine hosted && CanDeferCheckpoint(line)
+                    ? await hosted.HandleRetainedSourceAsync(line, location, cancellationToken).ConfigureAwait(false)
                     : await _engine.HandleSourceAsync(line, location, cancellationToken).ConfigureAwait(false);
-            }
 
             // Hosted input remains paired with the source revision that actually acknowledged it.
             if (_engine is not IHostedEngine)

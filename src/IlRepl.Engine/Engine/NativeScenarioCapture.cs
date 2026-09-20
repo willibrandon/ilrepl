@@ -44,7 +44,8 @@ internal static class NativeScenarioCapture
             throw new ReplException("native comparison scenarios require compatible left and right method signatures");
         }
 
-        var helpers = new Dictionary<MethodBase, (ModuleDefinition Module, string Name, MemoryStream Image)>();
+        var helpers = new Dictionary<MethodBase, (ModuleDefinition Module, string Name)>();
+        var streams = new List<MemoryStream>();
         var pending = new Queue<MethodInfo>();
         pending.Enqueue(scenario);
         try
@@ -64,12 +65,13 @@ internal static class NativeScenarioCapture
 
                 // Cecil reads a module on demand, so its stream stays open for as long as the module is in use.
                 var stream = new MemoryStream(definition.Image, writable: false);
+                streams.Add(stream);
                 var module = ModuleDefinition.ReadModule(stream);
                 var name = "ilrepl.native.scenario." + Guid.NewGuid().ToString("N");
                 module.Assembly.Name.Name = name;
                 module.Name = name + ".dll";
                 module.Mvid = Guid.NewGuid();
-                helpers.Add(helper, (module, name, stream));
+                helpers.Add(helper, (module, name));
                 var body = (MethodDefinition)module.LookupToken(helper.MetadataToken);
                 foreach (var instruction in body.Body.Instructions)
                 {
@@ -211,11 +213,16 @@ internal static class NativeScenarioCapture
         }
         finally
         {
-            foreach (var helper in helpers.Values)
-            {
-                helper.Module.Dispose();
-                helper.Image.Dispose();
-            }
+            // A module reads its image on demand, so the modules go first and their images after them.
+            Release(helpers.Values.Select(helper => helper.Module).Concat<IDisposable>(streams));
+        }
+    }
+
+    private static void Release(IEnumerable<IDisposable> resources)
+    {
+        foreach (var resource in resources)
+        {
+            resource.Dispose();
         }
     }
 

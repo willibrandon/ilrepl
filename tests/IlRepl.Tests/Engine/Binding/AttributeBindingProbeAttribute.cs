@@ -16,7 +16,7 @@ public sealed class AttributeBindingProbeAttribute : Attribute
     /// <param name="values">The attribute's array argument.</param>
     public AttributeBindingProbeAttribute(int[] values)
     {
-        Calls += values.Length;
+        Record(values.Length);
     }
 
     /// <summary>
@@ -28,7 +28,10 @@ public sealed class AttributeBindingProbeAttribute : Attribute
         set
         {
             field = value;
-            Calls += value.Length;
+            Record(value.Length);
         }
     } = "";
+
+    // The runtime creates attributes on whichever thread asks for them.
+    private static void Record(int calls) => Interlocked.Add(ref Calls, calls);
 }

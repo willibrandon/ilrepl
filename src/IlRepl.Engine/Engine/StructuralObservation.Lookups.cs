@@ -87,7 +87,7 @@ internal sealed partial class StructuralObservation
 
         for (var current = type; current is not null; current = current.BaseType)
         {
-            if (current.IsConstructedGenericType && current.GetGenericTypeDefinition().FullName == "System.Linq.Lookup`2")
+            if (current.IsConstructedGenericType && current.GetGenericTypeDefinition() == typeof(Lookup<,>))
             {
                 return current;
             }

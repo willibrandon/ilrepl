@@ -112,22 +112,9 @@ public static partial class ComparisonDescendantSource
         try
         {
             var parts = record.Split(' ');
-            var process = Process.GetProcessById(int.Parse(parts[0], CultureInfo.InvariantCulture));
-            try
-            {
-                if (OwnedProcessGroup.GetStartIdentity(process) == long.Parse(parts[1], CultureInfo.InvariantCulture))
-                {
-                    return process;
-                }
-            }
-            catch
-            {
-                process.Dispose();
-                throw;
-            }
-
-            process.Dispose();
-            return null;
+            using var process = new Owned<Process>(Process.GetProcessById(int.Parse(parts[0], CultureInfo.InvariantCulture)));
+            return OwnedProcessGroup.GetStartIdentity(process.Value) == long.Parse(parts[1], CultureInfo.InvariantCulture)
+                ? process.Release() : null;
         }
         catch (Exception exception) when (exception is ArgumentException or InvalidOperationException
             or FileNotFoundException or DirectoryNotFoundException

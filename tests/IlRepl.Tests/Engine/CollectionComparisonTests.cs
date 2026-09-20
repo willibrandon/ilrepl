@@ -151,7 +151,7 @@ public sealed class CollectionComparisonTests
             var value = Observe(source);
             var field = value.Members.Single(member => member.Name.EndsWith("::Extra", StringComparison.Ordinal)).Value;
             var element = value.Members.Single(member => member.Name == "0").Value;
-            if (source == dictionary)
+            if (ReferenceEquals(source, dictionary))
             {
                 element = element.Members[1].Value;
             }

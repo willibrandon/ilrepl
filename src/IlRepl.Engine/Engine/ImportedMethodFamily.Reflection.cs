@@ -63,7 +63,7 @@ internal sealed partial class ImportedMethodFamily
             || method.Name.StartsWith("get_Declared", StringComparison.Ordinal) || method.Name == nameof(Type.InvokeMember);
         return type == typeof(Activator) || type == typeof(object) && method.Name == nameof(GetType)
             || createsDelegateByName || reflectsOnType && looksUp
-            || type?.FullName == "System.Reflection.RuntimeReflectionExtensions";
+            || type == typeof(RuntimeReflectionExtensions);
     }
 
     private static bool EnumeratesAssemblyTypes(MethodBase method)

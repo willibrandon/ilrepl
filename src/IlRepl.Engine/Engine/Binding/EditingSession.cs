@@ -111,6 +111,7 @@ public sealed partial class EditingSession : IDisposable
     {
         foreach (var _ in ReplayPrefix(lines, caretLine, cancellationToken))
         {
+            // Each step replays one line into this session. Here nothing pauses between them.
         }
 
         return View(inspecting);

@@ -201,7 +201,7 @@ public sealed class SnapshotTypeTable
 
         var enclosing = _entries.LastOrDefault(e => e.FullName == enclosingPath).Type;
         var placeholder = TypeSymbol.Named(
-            DefinitionId.ForDeclaration(_sessionAssembly, -Interlocked.Increment(ref s_placeholders)),
+            DefinitionId.ForDeclaration(_sessionAssembly, NextPlaceholder()),
             nested,
             enclosing?.Namespace ?? "",
             enclosing,
@@ -224,4 +224,7 @@ public sealed class SnapshotTypeTable
         var tick = name.LastIndexOf('`');
         return tick < 0 ? name : name[..tick];
     }
+
+    // Placeholders from every table in the process draw on one sequence, so no two ever share an identity.
+    private static long NextPlaceholder() => -Interlocked.Increment(ref s_placeholders);
 }

@@ -41,8 +41,9 @@ internal sealed class IlVerificationOracle : IResolver, IDisposable
         {
             return verifier.Verify(reader).ToArray();
         }
-        catch (NullReferenceException exception)
+        catch (Exception exception) when (exception.TargetSite?.Module.Assembly == typeof(Verifier).Assembly)
         {
+            // The verifier gives up on some invalid images with an exception from its own code, where a result was expected.
             throw new InvalidOperationException("ILVerification could not finish the fixture: " + exception.Message, exception);
         }
     }

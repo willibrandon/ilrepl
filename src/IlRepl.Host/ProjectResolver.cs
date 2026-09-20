@@ -245,13 +245,11 @@ internal static class ProjectResolver
         {
             try
             {
-                var parsed = JsonDocument.Parse(output[start..]);
-                if (parsed.RootElement.TryGetProperty("Properties", out _))
+                using var parsed = new Owned<JsonDocument>(JsonDocument.Parse(output[start..]));
+                if (parsed.Value.RootElement.TryGetProperty("Properties", out _))
                 {
-                    return parsed;
+                    return parsed.Release();
                 }
-
-                parsed.Dispose();
             }
             catch (JsonException)
             {

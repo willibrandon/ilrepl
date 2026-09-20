@@ -4,6 +4,7 @@ using System.Reflection.Emit;
 using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
+using IlRepl.Protocol;
 
 namespace IlRepl.Engine;
 
@@ -108,14 +109,14 @@ public static class MethodBodySource
 
     private static MethodBodyImage? ReadFromImage(MethodBase method, byte[]? bytes, Stream? stream, string describe, IList<string> notes)
     {
-        PEReader? pe = null;
         try
         {
-            pe = bytes is not null ? new PEReader(ImmutableArray.Create(bytes)) : new PEReader(stream!);
+            // The reader goes to the image that is returned, and is closed on every other way out of here.
+            using var reader = new Owned<PEReader>(bytes is not null ? new PEReader(ImmutableArray.Create(bytes)) : new PEReader(stream!));
+            var pe = reader.Value;
             if (!pe.HasMetadata)
             {
                 notes.Add("the image has no metadata; the body was read through reflection");
-                pe.Dispose();
                 return null;
             }
 
@@ -126,7 +127,6 @@ public static class MethodBodySource
                 notes.Add(
                     "the image on disk no longer matches the loaded assembly (different module version id); the body was read through " +
                     "reflection");
-                pe.Dispose();
                 return null;
             }
 
@@ -134,7 +134,6 @@ public static class MethodBodySource
             var definition = metadata.GetMethodDefinition(handle);
             if (definition.RelativeVirtualAddress == 0)
             {
-                pe.Dispose();
                 throw new ReplException($"{describe} has no IL body");
             }
 
@@ -156,11 +155,10 @@ public static class MethodBodySource
                 null)).ToList();
             var localToken = body.LocalSignature.IsNil ? 0 : MetadataTokens.GetToken(body.LocalSignature);
             return new MethodBodyImage(body.GetILBytes() ?? [], body.MaxStack, body.LocalVariablesInitialized, localToken, regions,
-                metadata, pe, "image");
+                metadata, reader.Release(), "image");
         }
         catch (Exception ex) when (ex is BadImageFormatException or InvalidOperationException or ArgumentException or IOException)
         {
-            pe?.Dispose();
             notes.Add($"the image could not be read ({ex.Message}); the body was read through reflection");
             return null;
         }

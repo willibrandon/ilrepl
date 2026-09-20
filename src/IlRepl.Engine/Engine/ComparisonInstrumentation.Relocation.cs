@@ -171,7 +171,7 @@ internal static partial class ComparisonInstrumentation
     {
         foreach (var instruction in method.Body.Instructions)
         {
-            if (instruction.Operand == previous)
+            if (ReferenceEquals(instruction.Operand, previous))
             {
                 instruction.Operand = next;
             }

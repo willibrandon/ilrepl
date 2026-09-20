@@ -20,7 +20,7 @@ public class Counter
     /// </summary>
     public Counter()
     {
-        Instances++;
+        CountInstance();
     }
 
     /// <summary>
@@ -55,4 +55,7 @@ public class Counter
 
     /// <inheritdoc />
     public override string ToString() => $"Counter({Count})";
+
+    // Counters can be created on any thread, and they all share this one number.
+    private static void CountInstance() => Interlocked.Increment(ref Instances);
 }

@@ -155,14 +155,11 @@ public sealed class SnapshotBindingScope : IBindingScope
         var typeName = dot < 0 ? top : top[(dot + 1)..];
         var nested = segments.Length > 1 ? segments[1..] : [];
 
-        if (assemblyHint is not null && _snapshot.Catalog.FindAssembly(assemblyHint) is { } hinted)
+        // Reference facades forward most types elsewhere, so a hint that finds nothing falls through to a global search.
+        if (assemblyHint is not null && _snapshot.Catalog.FindAssembly(assemblyHint) is { } hinted
+            && _snapshot.Catalog.FindPath(hinted, ns, typeName, nested) is { } fromHint)
         {
-            if (_snapshot.Catalog.FindPath(hinted, ns, typeName, nested) is { } fromHint)
-            {
-                return fromHint;
-            }
-
-            // Reference facades forward most types elsewhere; fall through to a global search.
+            return fromHint;
         }
 
         if (FindEverywhere(ns, typeName, nested) is { } found)

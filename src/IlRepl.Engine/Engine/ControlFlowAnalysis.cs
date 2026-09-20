@@ -501,7 +501,7 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
                         }
 
                         var thisArgumentIsOriginal = view.WritesThisArgument ? popped[^1].IsThis
-                            : invalidatedAddressSlots.Contains((true, 0)) ? false : state.ThisArgumentIsOriginal;
+                            : !invalidatedAddressSlots.Contains((true, 0)) && state.ThisArgumentIsOriginal;
                         if (filterPaths is { Length: > 0 })
                         {
                             thisArgumentIsOriginal = filterPaths.All(path => path.ThisArgumentIsOriginal);
@@ -2364,13 +2364,10 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
         if (op.Name is "call" or "callvirt" or "newobj" or "calli")
         {
             var first = count - view.ArgumentPops;
-            if (op == OpCodes.Calli)
+            if (op == OpCodes.Calli && kind is not (null or StackCategory.NativeInt))
             {
-                if (kind is not (null or StackCategory.NativeInt))
-                {
-                    return OperandFailure($"calli needs a function pointer but found {_types.Name(top)}",
-                        count - 1, "function pointer", "native int");
-                }
+                return OperandFailure($"calli needs a function pointer but found {_types.Name(top)}",
+                    count - 1, "function pointer", "native int");
             }
 
             if (view.IsInstance && !Receiver(values[first].Type, view.DeclaringType))
@@ -3311,7 +3308,7 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
             }
 
             var thisArgumentIsOriginal = view.WritesThisArgument ? pathPopped[^1].IsThis
-                : invalidatedAddressSlots.Contains((true, 0)) ? false : path.ThisArgumentIsOriginal;
+                : !invalidatedAddressSlots.Contains((true, 0)) && path.ThisArgumentIsOriginal;
             var pendingEffect = InvalidatesBoundUnwind(view, invalidatedAddressSlots)
                 && path.PendingUnwindEffect?.BoundOutputs is not null
                 ? path.PendingUnwindEffect with { CorrelationLost = true }
@@ -3526,8 +3523,8 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
             }
         }
 
-        var original = view.WritesThisArgument || invalidatedAddressSlots.Contains((true, 0))
-            ? false : path.ThisArgumentIsOriginal;
+        var written = view.WritesThisArgument || invalidatedAddressSlots.Contains((true, 0));
+        var original = !written && path.ThisArgumentIsOriginal;
         return path with
         {
             Values = [],
@@ -3813,13 +3810,10 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
         out IReadOnlyDictionary<int, FilterPathValue>? result)
     {
         var conditions = existing is null ? [] : new Dictionary<int, FilterPathValue>(existing);
-        if (conditions.TryGetValue(source, out var current))
+        if (conditions.TryGetValue(source, out var current) && !TryMergeReceiverCondition(current, condition, out condition))
         {
-            if (!TryMergeReceiverCondition(current, condition, out condition))
-            {
-                result = existing;
-                return false;
-            }
+            result = existing;
+            return false;
         }
 
         conditions[source] = condition;

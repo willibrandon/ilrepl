@@ -191,15 +191,9 @@ public static partial class NativeNormalizer
                 if (memoryUse is not null && memoryUse.Groups[2].Success && TryNumber(memoryUse.Groups[2].Value, out var displacement))
                 {
                     usedValue = unchecked(usedValue + displacement);
-                    if (value.Page)
-                    {
-                        components = [.. components, new NativeAddressPart(index, memoryUse.Groups[2].Index,
-                            memoryUse.Groups[2].Length, -1, "lo12")];
-                    }
-                    else
-                    {
-                        components = [.. components.Select(part => part with { Adjustment = part.Adjustment + displacement })];
-                    }
+                    components = value.Page
+                        ? [.. components, new NativeAddressPart(index, memoryUse.Groups[2].Index, memoryUse.Groups[2].Length, -1, "lo12")]
+                        : [.. components.Select(part => part with { Adjustment = part.Adjustment + displacement })];
                 }
 
                 var branchesThroughIt = operation is "call" or "jmp" or "tail.jmp" or "blr" or "br" && operands.Trim() == register;

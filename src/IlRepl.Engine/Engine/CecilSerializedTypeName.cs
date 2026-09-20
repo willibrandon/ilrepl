@@ -14,7 +14,7 @@ internal static class CecilSerializedTypeName
     /// <param name="type">The imported type.</param>
     /// <param name="module">The destination module.</param>
     /// <returns>Whether the type's serialized identity needs remapping.</returns>
-    internal static bool References(TypeReference type, ModuleDefinition module) => type.Scope == module
+    internal static bool References(TypeReference type, ModuleDefinition module) => ReferenceEquals(type.Scope, module)
         || type is GenericInstanceType generic && generic.GenericArguments.Any(argument => References(argument, module))
         || type is TypeSpecification specification && References(specification.ElementType, module);
 

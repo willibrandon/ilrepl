@@ -54,7 +54,7 @@ internal sealed class SnapshotDeclarationMembers : IDeclarationMembers
 
         var defined = new MethodSymbol
         {
-            Definition = DefinitionId.ForDeclaration(_declaration.Type.Definition.Assembly, -Interlocked.Increment(ref s_forwards)),
+            Definition = DefinitionId.ForDeclaration(_declaration.Type.Definition.Assembly, NextForward()),
             Source = MethodSymbolSource.Forward,
             DeclaringType = _declaration.Type,
             Name = signature.Name,
@@ -73,4 +73,7 @@ internal sealed class SnapshotDeclarationMembers : IDeclarationMembers
         _declaration.AddForward(defined);
         return defined;
     }
+
+    // Forward references from every snapshot in the process draw on one sequence, so no two ever share an identity.
+    private static long NextForward() => -Interlocked.Increment(ref s_forwards);
 }

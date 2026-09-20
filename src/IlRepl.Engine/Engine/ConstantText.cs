@@ -29,7 +29,7 @@ public static class ConstantText
         float v => "float32(" + v.ToString("R", CultureInfo.InvariantCulture) + ")",
         double v => "float64(" + v.ToString("R", CultureInfo.InvariantCulture) + ")",
         Type t => "type(" + TypeNameFormatter.Pretty(t) + ")",
-        Enum e => TypeNameFormatter.Pretty(e.GetType()) + "." + e.ToString(),
+        Enum e => TypeNameFormatter.Pretty(e.GetType()) + "." + e,
         Array a => "{" + string.Join(", ", a.Cast<object?>().Select(Describe)) + "}",
         _ => value.ToString() ?? "",
     };

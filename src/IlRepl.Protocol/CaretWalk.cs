@@ -317,7 +317,7 @@ internal sealed class CaretWalk
                 return verb with { DeclarationComplete = false };
             }
 
-            name += " " + _r.TextAt(head + 1).ToString();
+            name = string.Concat(name, " ", _r.TextAt(head + 1));
             if (name == ".session restart")
             {
                 return CompletionSite.None;
@@ -852,7 +852,7 @@ internal sealed class CaretWalk
             if (_r.IsPunct(a, '='))
             {
                 var literalEnd = _r.ReadLiteral(a + 1);
-                if (_caret >= _r.StartOf(a) && (literalEnd > a + 1 ? _caret <= _r.EndOf(literalEnd - 1) : true)
+                if (_caret >= _r.StartOf(a) && (literalEnd <= a + 1 || _caret <= _r.EndOf(literalEnd - 1))
                 && (a + 1 >= end || _caret <= _r.StartOf(a + 1) || literalEnd > a + 1))
                 {
                     return CompletionSite.None;
@@ -1053,20 +1053,17 @@ internal sealed class CaretWalk
                 continue;
             }
 
-            if (_r.IsWord(s, "modreq") || _r.IsWord(s, "modopt"))
+            if ((_r.IsWord(s, "modreq") || _r.IsWord(s, "modopt")) && _r.IsPunct(s + 1, '('))
             {
-                if (_r.IsPunct(s + 1, '('))
+                var close = _r.Matching(s + 1);
+                if (Inside(s + 1, close))
                 {
-                    var close = _r.Matching(s + 1);
-                    if (Inside(s + 1, close))
-                    {
-                        var innerEnd = _r.ReadType(s + 2);
-                        return TypeAfter(s + 2, innerEnd, owner, complete) ?? CompletionSite.None;
-                    }
-
-                    s = close < 0 ? end : close + 1;
-                    continue;
+                    var innerEnd = _r.ReadType(s + 2);
+                    return TypeAfter(s + 2, innerEnd, owner, complete) ?? CompletionSite.None;
                 }
+
+                s = close < 0 ? end : close + 1;
+                continue;
             }
 
             s++;

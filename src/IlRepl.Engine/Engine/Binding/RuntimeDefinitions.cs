@@ -72,17 +72,10 @@ public static class RuntimeDefinitions
             throw new ArgumentException($"'{definition}' is not a type definition", nameof(definition));
         }
 
-        DefinitionId id;
-        if (IsDynamic(definition))
-        {
-            id = DeclarationIds.GetValue(definition, t => new StrongBox<DefinitionId>(DefinitionId.ForDeclaration(AssemblyInstance(((
-                Type)t).Assembly), Interlocked.Increment(ref s_nextDeclaration)))).Value;
-        }
-        else
-        {
-            id = DefinitionId.Loaded(AssemblyInstance(definition.Assembly), definition.Module.ModuleVersionId, definition.MetadataToken);
-        }
-
+        var id = IsDynamic(definition)
+            ? DeclarationIds.GetValue(definition, t => new StrongBox<DefinitionId>(DefinitionId.ForDeclaration(AssemblyInstance(((
+                Type)t).Assembly), Interlocked.Increment(ref s_nextDeclaration)))).Value
+            : DefinitionId.Loaded(AssemblyInstance(definition.Assembly), definition.Module.ModuleVersionId, definition.MetadataToken);
         Remember(Types, id, definition);
         return id;
     }

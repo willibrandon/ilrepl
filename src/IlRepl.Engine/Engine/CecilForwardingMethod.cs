@@ -102,7 +102,7 @@ internal static class CecilForwardingMethod
     {
         foreach (var (source, target) in map)
         {
-            if (target is not GenericParameter parameter || source.Owner == parameter.Owner)
+            if (target is not GenericParameter parameter || ReferenceEquals(source.Owner, parameter.Owner))
             {
                 continue;
             }
