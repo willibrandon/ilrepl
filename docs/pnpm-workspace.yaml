@@ -1,0 +1,4 @@
+overrides:
+  # Expressive Code uses postcss-nested 6, which still requires the vulnerable parser 6.x.
+  # https://github.com/advisories/GHSA-rj75-hqrm-r3gf
+  postcss-selector-parser@<7.1.6: ^7.1.6
