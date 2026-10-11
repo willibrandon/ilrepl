@@ -90,6 +90,7 @@ internal static partial class ConsoleStartupProbe
                     }
                     catch (OperationCanceledException) when (stopMonitor.IsCancellationRequested)
                     {
+                        return;
                     }
 
                     catch (Exception exception) when (exception is not (StackOverflowException or AccessViolationException))
