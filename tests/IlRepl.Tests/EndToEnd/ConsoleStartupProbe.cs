@@ -38,6 +38,24 @@ internal static partial class ConsoleStartupProbe
         {
             await ReadLifecycleAsync(mode, original, token);
         }
+
+        else if (mode == "screen-output")
+        {
+            await using var presentation = new ConsolePresentation();
+            await presentation.EnterRawModeAsync(token);
+            await presentation.WriteOutputAsync("\u001b[?2026hbefore-exit"u8.ToArray(), token);
+            await presentation.ExitRawModeAsync(token);
+            await Task.WhenAll(
+                presentation.WriteOutputAsync("\u001b[?2026hlate-first"u8.ToArray(), token).AsTask(),
+                presentation.WriteOutputAsync("\u001b[?2026hlate-second"u8.ToArray(), token).AsTask());
+            await presentation.FlushAsync(token);
+            Console.WriteLine("late-output-ready");
+            while (!File.Exists(Path.Join(directory, "late-output.observed")))
+            {
+                await Task.Delay(1, token);
+            }
+        }
+
         else
         {
             using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(token);
