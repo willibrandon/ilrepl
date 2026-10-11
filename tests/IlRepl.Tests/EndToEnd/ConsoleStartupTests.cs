@@ -206,6 +206,40 @@ public sealed class ConsoleStartupTests
     }
 
     /// <summary>
+    /// Late frame writes after raw-mode exit preserve their content and leave synchronized output released.
+    /// </summary>
+    [TestMethod]
+    [Timeout(60_000, CooperativeCancellation = true)]
+    public async Task Probe_LateOutputKeepsTheScreenReleased()
+    {
+        var token = TestContext.CancellationToken;
+        using var files = new SessionWorkspaceFixture();
+        var recorder = new WorkloadRecorder();
+        await using var terminal = Create(
+            files,
+            [typeof(ConsoleStartupProbe).Assembly.Location, "--console-startup-probe", "screen-output", files.DirectoryPath])
+            .AddWorkloadFilter(recorder).Build();
+        var run = terminal.RunAsync(token);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(20));
+        await auto.WaitUntilAsync(
+            _ => recorder.Output.Contains("late-output-ready", StringComparison.Ordinal),
+            description: "late console output completes before presentation disposal");
+        var output = recorder.Output;
+        Assert.Contains("before-exit", output);
+        Assert.Contains("late-first", output);
+        Assert.Contains("late-second", output);
+        Assert.IsGreaterThan(
+            output.LastIndexOf("\u001b[?2026h", StringComparison.Ordinal),
+            output.LastIndexOf("\u001b[?2026l", StringComparison.Ordinal),
+            "Late output left the screen held after restoration.");
+        await File.WriteAllTextAsync(Path.Join(files.DirectoryPath, "late-output.observed"), "observed", token);
+        await auto.WaitUntilTextAsync("console-mode-restored");
+        await auto.TypeAsync("restored λ", ct: token);
+        await auto.EnterAsync(ct: token);
+        await AssertCookedLineAsync(auto, files, run, token);
+    }
+
+    /// <summary>
     /// Raw reads settle before restoration and disposal, and repeated entry still accepts exact Unicode input.
     /// </summary>
     /// <param name="mode">The real read cancellation, repeated-entry, or concurrent cleanup scenario.</param>

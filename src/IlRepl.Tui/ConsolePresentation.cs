@@ -15,6 +15,7 @@ internal sealed class ConsolePresentation : IHex1bTerminalPresentationAdapter, I
     private readonly object _sync = new();
     private readonly SemaphoreSlim _lifecycle = new(1, 1);
     private readonly SemaphoreSlim _reader = new(1, 1);
+    private readonly SemaphoreSlim _output = new(1, 1);
     private readonly List<Task<ReadOnlyMemory<byte>>> _reads = [];
     private readonly TerminalReplyBuffer _input = new();
     private CancellationTokenSource? _rawMode;
@@ -59,7 +60,34 @@ internal sealed class ConsolePresentation : IHex1bTerminalPresentationAdapter, I
     }
 
     /// <inheritdoc />
-    public ValueTask WriteOutputAsync(ReadOnlyMemory<byte> data, CancellationToken ct = default) => _inner.WriteOutputAsync(data, ct);
+    public async ValueTask WriteOutputAsync(ReadOnlyMemory<byte> data, CancellationToken ct = default)
+    {
+        await _output.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            bool releaseScreen;
+            lock (_sync)
+            {
+                if (_disposed)
+                {
+                    return;
+                }
+
+                releaseScreen = _rawMode is null;
+            }
+
+            await _inner.WriteOutputAsync(data, ct).ConfigureAwait(false);
+            if (releaseScreen)
+            {
+                // The terminal can still forward an in-flight frame after it cancels its output pump during shutdown.
+                await ReleaseScreenAsync().ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            _output.Release();
+        }
+    }
 
     /// <inheritdoc />
     public ValueTask<ReadOnlyMemory<byte>> ReadInputAsync(CancellationToken ct = default)
@@ -232,12 +260,16 @@ internal sealed class ConsolePresentation : IHex1bTerminalPresentationAdapter, I
         finally
         {
             _input.Reset();
-            if (rawMode is not null)
+            await _output.WaitAsync().ConfigureAwait(false);
+            try
             {
                 await ReleaseScreenAsync().ConfigureAwait(false);
+                await _inner.ExitRawModeAsync(CancellationToken.None).ConfigureAwait(false);
             }
-
-            await _inner.ExitRawModeAsync(CancellationToken.None).ConfigureAwait(false);
+            finally
+            {
+                _output.Release();
+            }
         }
     }
 
@@ -286,7 +318,15 @@ internal sealed class ConsolePresentation : IHex1bTerminalPresentationAdapter, I
             }
             finally
             {
-                await _inner.DisposeAsync().ConfigureAwait(false);
+                await _output.WaitAsync().ConfigureAwait(false);
+                try
+                {
+                    await _inner.DisposeAsync().ConfigureAwait(false);
+                }
+                finally
+                {
+                    _output.Release();
+                }
             }
         }
         finally

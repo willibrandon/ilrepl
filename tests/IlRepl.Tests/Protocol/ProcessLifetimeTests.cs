@@ -166,7 +166,7 @@ public sealed partial class ProcessLifetimeTests
     /// Killing only the frontend stops its hung host and grandchildren whose intermediate parent has already exited.
     /// </summary>
     [TestMethod]
-    [Timeout(60_000, CooperativeCancellation = true)]
+    [Timeout(90_000, CooperativeCancellation = true)]
     public Task FrontendKilled_StopsHostAndOrphanedDescendants() => VerifyFrontendLossAsync(false);
 
     /// <summary>
@@ -174,7 +174,7 @@ public sealed partial class ProcessLifetimeTests
     /// </summary>
     [TestMethod]
     [OSCondition(ConditionMode.Exclude, OperatingSystems.Windows)]
-    [Timeout(60_000, CooperativeCancellation = true)]
+    [Timeout(90_000, CooperativeCancellation = true)]
     public Task FrontendKilledDuringAdoption_StopsHostAndDescendants() => VerifyFrontendLossAsync(true);
 
     private async Task VerifyFrontendLossAsync(bool adoptionGap)
@@ -193,6 +193,7 @@ public sealed partial class ProcessLifetimeTests
         start.ArgumentList.Add("--batch");
         start.ArgumentList.Add("--quiet");
         start.ArgumentList.Add("--no-color");
+        var startup = Stopwatch.StartNew();
         using var frontend = Process.Start(start) ?? throw new IOException("the frontend did not start");
         var stdout = frontend.StandardOutput.ReadToEndAsync(token);
         var stderr = frontend.StandardError.ReadToEndAsync(token);
@@ -222,10 +223,15 @@ public sealed partial class ProcessLifetimeTests
             }
 
             await frontend.StandardInput.FlushAsync(token);
-            await WaitUntilAsync(() => File.Exists(hostRecord), token);
+            // Starting the frontend, loading the test assembly, and compiling the invocation share the startup deadline.
+            // The separate shutdown waits below still enforce prompt process cleanup once user code is actually running.
+            await WaitUntilAsync(() => File.Exists(hostRecord) || frontend.HasExited, token, TimeSpan.FromSeconds(60));
+            Assert.IsFalse(frontend.HasExited, "The frontend exited before the invocation recorded its host.");
+            TestContext.WriteLine("Frontend invocation started after " + startup.Elapsed);
             host = Process.GetProcessById(int.Parse(await File.ReadAllTextAsync(hostRecord, token), CultureInfo.InvariantCulture));
             hostScope = OwnedProcessGroup.Describe(host, "frontend-loss");
-            await WaitUntilAsync(() => File.Exists(descendantsReady), token);
+            await WaitUntilAsync(() => File.Exists(descendantsReady) || frontend.HasExited, token, TimeSpan.FromSeconds(60));
+            Assert.IsFalse(frontend.HasExited, "The frontend exited before its descendants were ready.");
             records = await File.ReadAllLinesAsync(descendants, token);
             Assert.HasCount(2, records);
             Assert.IsFalse(IsExecuting(records[0]), "The intermediate parent must exit before the frontend is killed.");
@@ -296,6 +302,8 @@ public sealed partial class ProcessLifetimeTests
             }
 
             await Task.WhenAll(stdout, stderr);
+            TestContext.WriteLine("Frontend standard output:\n" + await stdout);
+            TestContext.WriteLine("Frontend standard error:\n" + await stderr);
         }
     }
 
@@ -341,10 +349,10 @@ public sealed partial class ProcessLifetimeTests
 
     private static string Text(HandleReply reply) => string.Join('\n', reply.Lines.Select(line => line.PlainText));
 
-    private static async Task WaitUntilAsync(Func<bool> condition, CancellationToken cancellationToken)
+    private static async Task WaitUntilAsync(Func<bool> condition, CancellationToken cancellationToken, TimeSpan? deadline = null)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(TimeSpan.FromSeconds(15));
+        timeout.CancelAfter(deadline ?? TimeSpan.FromSeconds(15));
         while (!condition())
         {
             await Task.Delay(10, timeout.Token);
