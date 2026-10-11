@@ -185,11 +185,12 @@ public sealed class ConsoleStartupTests
     /// <summary>
     /// Successful entry, repeated entry, cancellation, and disposal preserve the original native console mode and cooked input.
     /// </summary>
-    /// <param name="mode">Whether caller cancellation occurs before or during actual native raw-mode entry.</param>
+    /// <param name="mode">The cancellation timing around actual native raw-mode entry.</param>
     [TestMethod]
     [DataRow("normal")]
     [DataRow("cancel-before")]
     [DataRow("cancel-during")]
+    [DataRow("cancel-after-entry")]
     [Timeout(60_000, CooperativeCancellation = true)]
     public async Task Probe_RestoresConsoleMode(string mode)
     {

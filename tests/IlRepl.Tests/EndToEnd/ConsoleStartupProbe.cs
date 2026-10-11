@@ -61,6 +61,7 @@ internal static partial class ConsoleStartupProbe
             using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(token);
             using var stopMonitor = new CancellationTokenSource();
             using var monitorReady = new ManualResetEventSlim();
+            using var observeEntry = new ManualResetEventSlim(mode != "cancel-after-entry");
             Exception? monitorError = null;
             Thread? monitor = null;
             if (mode == "cancel-before")
@@ -68,13 +69,14 @@ internal static partial class ConsoleStartupProbe
                 cancellation.Cancel();
             }
 
-            if (mode == "cancel-during")
+            if (mode is "cancel-during" or "cancel-after-entry")
             {
                 monitor = new Thread(() =>
                 {
                     monitorReady.Set();
                     try
                     {
+                        observeEntry.Wait(stopMonitor.Token);
                         while (!stopMonitor.IsCancellationRequested && !token.IsCancellationRequested)
                         {
                             if (!CaptureMode().SequenceEqual(original))
@@ -86,6 +88,10 @@ internal static partial class ConsoleStartupProbe
                             Thread.Yield();
                         }
                     }
+                    catch (OperationCanceledException) when (stopMonitor.IsCancellationRequested)
+                    {
+                    }
+
                     catch (Exception exception) when (exception is not (StackOverflowException or AccessViolationException))
                     {
                         monitorError = exception;
@@ -110,14 +116,19 @@ internal static partial class ConsoleStartupProbe
                     cancelled = true;
                 }
 
-                if (OperatingSystem.IsWindows() && mode == "cancel-during" && !cancelled)
+                if (mode == "cancel-after-entry")
                 {
-                    // The Windows driver has no asynchronous capability probe. Keep its entered native mode observable
-                    // until cancellation is acknowledged, then prove that the cancelled caller cannot re-enter it.
+                    observeEntry.Set();
+                }
+
+                if ((mode is "cancel-during" or "cancel-after-entry") && !cancelled)
+                {
+                    // Entry can finish before the observer is scheduled. Keep native mode observable until cancellation
+                    // is acknowledged, then prove that the cancelled caller cannot re-enter it on every platform.
                     monitor!.Join();
                     if (!cancellation.IsCancellationRequested || CaptureMode().SequenceEqual(original))
                     {
-                        throw new InvalidOperationException("Windows raw-mode cancellation was not observed.");
+                        throw new InvalidOperationException("Raw-mode cancellation was not observed.");
                     }
 
                     try
