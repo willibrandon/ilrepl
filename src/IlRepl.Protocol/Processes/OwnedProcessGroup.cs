@@ -46,7 +46,9 @@ public sealed partial class OwnedProcessGroup : IDisposable
 
         var limits = new OwnedJobExtendedLimits
         {
-            Basic = new OwnedJobLimits { Flags = 0x2000 }, // JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+            // The frontend reports worker failures, including native faults that produce no diagnostic text.
+            // JOB_OBJECT_LIMIT_DIE_ON_UNHANDLED_EXCEPTION avoids waiting for Windows Error Reporting in that case.
+            Basic = new OwnedJobLimits { Flags = 0x2000 | 0x400 }, // KILL_ON_JOB_CLOSE | DIE_ON_UNHANDLED_EXCEPTION
         };
 
         if (SetInformationJobObject(_job, 9, in limits, (uint)Marshal.SizeOf<OwnedJobExtendedLimits>()) == 0

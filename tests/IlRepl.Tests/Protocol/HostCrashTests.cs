@@ -69,8 +69,7 @@ public sealed class HostCrashTests
         var watch = Stopwatch.StartNew();
         await Assert.ThrowsAsync<HostProtocolException>(() => engine.HandleAsync("ret", token));
         Assert.IsTrue(exited.Task.IsCompletedSuccessfully, "Exit publication must precede the failed execution reply.");
-        // Windows Error Reporting keeps a host that overflowed the execution thread for over half a minute, and a minute or two
-        // on a loaded machine. The frontend ends a host that wrote its report and stopped answering, so the wait stays short.
+        // Fatal native faults can produce no diagnostic text. The Windows job must prevent an Error Reporting wait in that case.
         Assert.IsLessThan(TimeSpan.FromSeconds(30), watch.Elapsed, "The failure must be reported without waiting for the system.");
         var observed = await exited.Task;
         Assert.AreEqual(engine.ProcessId, observed.ProcessId);
@@ -114,6 +113,44 @@ public sealed class HostCrashTests
         {
             Assert.Contains("AccessViolation", observed.StandardError);
         }
+    }
+
+    /// <summary>
+    /// Native failures without diagnostic output exit promptly under the frontend's Windows job policy.
+    /// </summary>
+    [TestMethod]
+    [OSCondition(OperatingSystems.Windows)]
+    [Timeout(45_000, CooperativeCancellation = true)]
+    public async Task NativeFailFast_ReportsObservedExitWithoutDiagnostics()
+    {
+        var token = TestContext.CancellationToken;
+        await using var engine = await HostPaths.StartEngineAsync(token);
+        var exited = new TaskCompletionSource<HostExit>(TaskCreationOptions.RunContinuationsAsynchronously);
+        engine.Exited += value => exited.TrySetResult(value);
+        foreach (var line in new[]
+        {
+            ".load " + LiteralParser.Escape(typeof(WindowsFatalSource).Assembly.Location),
+            "call bool IlRepl.Tests.Protocol.WindowsFatalSource::HandlesOwnCrashes()",
+        })
+        {
+            var reply = await engine.HandleAsync(line, token);
+            Assert.IsTrue(reply.Succeeded, string.Join('\n', reply.Lines.Select(item => item.PlainText)));
+        }
+
+        var policy = await engine.HandleAsync("ret", token);
+        Assert.IsTrue(policy.Succeeded, string.Join('\n', policy.Lines.Select(item => item.PlainText)));
+        Assert.Contains("= true : bool", Assert.ContainsSingle(policy.Lines.Where(line => line.Kind == LineKind.Result)).PlainText);
+        Assert.IsTrue((await engine.HandleAsync("call void IlRepl.Tests.Protocol.WindowsFatalSource::FailFast()", token)).Succeeded);
+
+        var watch = Stopwatch.StartNew();
+        await Assert.ThrowsAsync<HostProtocolException>(() => engine.HandleAsync("ret", token));
+        Assert.IsTrue(exited.Task.IsCompletedSuccessfully, "Exit publication must precede the failed execution reply.");
+        Assert.IsLessThan(TimeSpan.FromSeconds(30), watch.Elapsed, "A silent native failure must not wait for Windows Error Reporting.");
+        var observed = await exited.Task;
+        Assert.AreEqual(engine.ProcessId, observed.ProcessId);
+        Assert.IsFalse(observed.Expected);
+        Assert.AreEqual(unchecked((int)0xC0000602), observed.ExitCode, "The native fail-fast status must remain intact.");
+        Assert.AreEqual("", observed.StandardError, "No diagnostic output may trigger the liveness watchdog in this regression.");
     }
 
     /// <summary>
