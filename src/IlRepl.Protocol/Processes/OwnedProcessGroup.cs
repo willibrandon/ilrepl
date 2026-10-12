@@ -16,11 +16,17 @@ public sealed partial class OwnedProcessGroup : IDisposable
     private bool _stopped;
 
     /// <summary>
-    /// Creates a separate Unix session before the worker is allowed to execute user code.
+    /// Configures native worker isolation and fatal error handling before user code is allowed to execute.
     /// </summary>
     public static void PrepareWorker()
     {
-        if (!OperatingSystem.IsWindows() && CreateSession() < 0)
+        if (OperatingSystem.IsWindows())
+        {
+            // Set the worker's native error mode after runtime startup, before it creates execution threads.
+            // Silent native faults must exit without entering Windows Error Reporting.
+            _ = SetErrorMode(GetErrorMode() | 0x2); // SEM_NOGPFAULTERRORBOX; the return value is the previous mode.
+        }
+        else if (CreateSession() < 0)
         {
             throw new Win32Exception(Marshal.GetLastPInvokeError());
         }
@@ -46,7 +52,9 @@ public sealed partial class OwnedProcessGroup : IDisposable
 
         var limits = new OwnedJobExtendedLimits
         {
-            Basic = new OwnedJobLimits { Flags = 0x2000 }, // JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+            // The frontend reports worker failures, including native faults that produce no diagnostic text.
+            // JOB_OBJECT_LIMIT_DIE_ON_UNHANDLED_EXCEPTION avoids waiting for Windows Error Reporting in that case.
+            Basic = new OwnedJobLimits { Flags = 0x2000 | 0x400 }, // KILL_ON_JOB_CLOSE | DIE_ON_UNHANDLED_EXCEPTION
         };
 
         if (SetInformationJobObject(_job, 9, in limits, (uint)Marshal.SizeOf<OwnedJobExtendedLimits>()) == 0
@@ -428,6 +436,14 @@ public sealed partial class OwnedProcessGroup : IDisposable
 
     [LibraryImport("libc", EntryPoint = "kill", SetLastError = true)]
     private static partial int SignalGroup(int group, int signal);
+
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    [LibraryImport("kernel32.dll")]
+    private static partial uint GetErrorMode();
+
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    [LibraryImport("kernel32.dll")]
+    private static partial uint SetErrorMode(uint mode);
 
     [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
     [LibraryImport("kernel32.dll", SetLastError = true)]

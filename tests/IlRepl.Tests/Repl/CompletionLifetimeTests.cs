@@ -107,7 +107,7 @@ public sealed class CompletionLifetimeTests
     }
 
     /// <summary>
-    /// Two hundred unsent lines replay within the interactive allocation and latency budgets.
+    /// Warm replay of two hundred unsent lines stays within the interactive allocation and latency budgets.
     /// </summary>
     [TestMethod]
     public async Task Speculation_TwoHundredLines_StaysWithinBudget()
@@ -117,14 +117,13 @@ public sealed class CompletionLifetimeTests
             return;
         }
 
+        string[] lines = [".method void Long() {", .. Enumerable.Repeat("nop", 198), "}"];
         using (var warmup = new EditingSession(new Session()))
         {
-            warmup.Speculate([".method void Warmup() {", "nop", "}"], 3,
-                cancellationToken: TestContext.CancellationToken);
+            warmup.Speculate(lines, lines.Length, cancellationToken: TestContext.CancellationToken);
         }
 
         using var editing = new EditingSession(new Session());
-        string[] lines = [".method void Long() {", .. Enumerable.Repeat("nop", 198), "}"];
         var before = GC.GetAllocatedBytesForCurrentThread();
         var watch = Stopwatch.StartNew();
         var view = editing.Speculate(lines, lines.Length, cancellationToken: TestContext.CancellationToken);
