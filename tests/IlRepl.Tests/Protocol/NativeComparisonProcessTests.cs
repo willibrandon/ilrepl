@@ -88,7 +88,10 @@ public sealed class NativeComparisonProcessTests
             }
         }
 
-        Assert.AreSequenceEqual(result.Left.Compilations[0].Normalized, result.Right.Compilations[0].Normalized);
+        // Arm64 can omit zero address segments, so proven loads compare through the canonical address view.
+        Assert.AreSequenceEqual(
+            NativeAddressLoads.Fold(result.Left.Compilations[0].Normalized),
+            NativeAddressLoads.Fold(result.Right.Compilations[0].Normalized));
     }
 
     /// <summary>
