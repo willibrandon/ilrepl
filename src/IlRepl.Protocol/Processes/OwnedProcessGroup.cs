@@ -16,11 +16,17 @@ public sealed partial class OwnedProcessGroup : IDisposable
     private bool _stopped;
 
     /// <summary>
-    /// Creates a separate Unix session before the worker is allowed to execute user code.
+    /// Configures native worker isolation and fatal error handling before user code is allowed to execute.
     /// </summary>
     public static void PrepareWorker()
     {
-        if (!OperatingSystem.IsWindows() && CreateSession() < 0)
+        if (OperatingSystem.IsWindows())
+        {
+            // Set the worker's native error mode after runtime startup, before it creates execution threads.
+            // Silent native faults must exit without entering Windows Error Reporting.
+            SetErrorMode(GetErrorMode() | 0x2); // SEM_NOGPFAULTERRORBOX
+        }
+        else if (CreateSession() < 0)
         {
             throw new Win32Exception(Marshal.GetLastPInvokeError());
         }
@@ -430,6 +436,14 @@ public sealed partial class OwnedProcessGroup : IDisposable
 
     [LibraryImport("libc", EntryPoint = "kill", SetLastError = true)]
     private static partial int SignalGroup(int group, int signal);
+
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    [LibraryImport("kernel32.dll")]
+    private static partial uint GetErrorMode();
+
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    [LibraryImport("kernel32.dll")]
+    private static partial uint SetErrorMode(uint mode);
 
     [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
     [LibraryImport("kernel32.dll", SetLastError = true)]
