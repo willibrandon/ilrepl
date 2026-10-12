@@ -24,7 +24,7 @@ public sealed partial class OwnedProcessGroup : IDisposable
         {
             // Set the worker's native error mode after runtime startup, before it creates execution threads.
             // Silent native faults must exit without entering Windows Error Reporting.
-            SetErrorMode(GetErrorMode() | 0x2); // SEM_NOGPFAULTERRORBOX
+            _ = SetErrorMode(GetErrorMode() | 0x2); // SEM_NOGPFAULTERRORBOX; the return value is the previous mode.
         }
         else if (CreateSession() < 0)
         {
